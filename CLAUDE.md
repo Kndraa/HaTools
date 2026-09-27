@@ -56,6 +56,8 @@ Tests/Editor/
   <ToolName>Tests.cs         One test file per tool
 .github/
   workflows/tests.yml        CI: compiles the package in Unity and runs the tests
+  workflows/release.yml      Publishes a .unitypackage when a version tag is pushed
+  scripts/build_unitypackage.py  Builds the .unitypackage (no Unity needed)
   test-project/              Throwaway Unity project the CI installs the package into
 ```
 
@@ -83,11 +85,13 @@ Tests/Editor/
 
 ## Testing
 
-Every push (except pushes that only change Markdown or the licence) runs `.github/workflows/tests.yml` on GitHub Actions:
+Every branch push (except pushes that only change Markdown or the licence) runs `.github/workflows/tests.yml` on GitHub Actions. It has two jobs:
 
-1. It copies `.github/test-project/` to a throwaway Unity project whose `Packages/manifest.json` installs this package from disk (`file:../../package`) and marks it testable.
-2. [GameCI's unity-test-runner](https://game-ci.com/docs/github/test-runner) opens the project in a headless Unity editor, compiles everything and runs the Edit Mode tests. Results appear as the **Edit Mode test results** check on the commit and as a `test-results` artifact.
-3. It fails if Unity had to generate any `.meta` file that isn't committed, and prints the generated files so they can be committed as they are.
+- **Build .unitypackage** (seconds, no Unity): runs the release build script (see Releasing), which fails if any file or folder is missing its `.meta`.
+- **Edit Mode tests** (several minutes, needs the Unity licence secrets):
+  1. It copies `.github/test-project/` to a throwaway Unity project whose `Packages/manifest.json` installs this package from disk (`file:../../package`) and marks it testable.
+  2. [GameCI's unity-test-runner](https://game-ci.com/docs/github/test-runner) opens the project in a headless Unity editor, compiles everything and runs the Edit Mode tests. Results appear as the **Edit Mode test results** check on the commit and as a `test-results` artifact.
+  3. It fails if Unity had to generate any `.meta` file that isn't committed, and prints the generated files so they can be committed as they are.
 
 **Unity version:** `.github/test-project/ProjectSettings/ProjectVersion.txt` (2022.3.22f1, the VRChat version). Change it there when VRChat moves to a new version.
 
@@ -106,6 +110,18 @@ Until the secrets exist, every run fails straight away at the "Check Unity licen
 - Clean up anything a test creates on disk (for example `Assets/Kndra tools/<ToolName>/`) in a `[TearDown]`.
 - The tests are only compiled when the package is listed under `testables` (the CI project does this), so they never reach users' projects.
 - Runs take several minutes and use the repository's GitHub Actions minutes. Pushes to the same branch cancel the previous run.
+
+## Releasing
+
+Releases are a single `.unitypackage` attached to a GitHub Release. It contains only the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition), installed into `Assets/Kndra tools/Editor/`. No `package.json`, README, licence, tests or docs. Without a `package.json` Unity doesn't treat it as a package, so it goes under `Assets/` instead of `Packages/`.
+
+1. Bump `version` in `package.json` (see Versioning) and merge to `main`. Wait for the tests to pass.
+2. Tag that commit with the same version and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
+3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds `kndra-tools-<version>.unitypackage` and creates the GitHub Release with generated notes.
+
+`.github/scripts/build_unitypackage.py` builds the package without Unity. It takes the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. The `Assets/Kndra tools` folder itself has no `.meta` in the repo, so its GUID is fixed in the script. The same commit always gives a byte-identical file. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
+
+While the repository is private, only people with access to it can download releases. A project must not have both the `.unitypackage` and the package (`Packages/com.kndra.tools`) installed: the two copies would clash.
 
 ## Versioning
 
@@ -161,6 +177,7 @@ Template:
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
 - 2026-09-27: Added Lighting Test Scene (0.2.0), ported from a standalone script. Changes from the draft: Kndra menu, namespace and output folder; moving is limited to the test scene; the anchor check counts renderers without an Anchor Override as separate sample points; a running bake is cancelled before rebuilding. Build and check logic split into internal methods (`BuildScene`, `MoveToStation`, `AnalyseRenderers`) so they can be tested without dialogs.
+- 2026-09-27: Added releases: pushing a `v*` tag publishes a `.unitypackage` (built by a script, no Unity) holding only the `Editor/` scripts, installed into `Assets/Kndra tools/Editor/`. Importing it into a real project hasn't been tried yet.
 - 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
