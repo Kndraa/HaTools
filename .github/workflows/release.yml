@@ -26,7 +26,7 @@ jobs:
           echo "VERSION=${version}" >> "$GITHUB_ENV"
 
       - name: Build .unitypackage
-        run: python3 .github/scripts/build_unitypackage.py "kndra-tools-${VERSION}.unitypackage"
+        run: python3 .github/scripts/build_unitypackage.py
 
       - name: Create GitHub Release
         env:

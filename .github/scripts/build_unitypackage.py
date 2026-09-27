@@ -33,7 +33,7 @@ def main():
     package = json.loads((ROOT / "package.json").read_text())
     # The package root folder has no .meta; Unity creates it on import
     install_dir = f"Packages/{package['name']}"
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / f"kndra-tools-{package['version']}.unitypackage"
+    out = ROOT / f"kndra-tools-{package['version']}.unitypackage"
 
     tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True, text=True).stdout
     files = sorted(f for f in tracked.split("\0") if f and included(f) and not f.endswith(".meta"))

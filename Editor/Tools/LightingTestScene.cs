@@ -80,7 +80,6 @@ namespace Kndra.Tools
             RenderSettings.skybox = null;
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.06f, 0.06f, 0.07f);
-            RenderSettings.fog = false;
 
             var floorMat = CreateMat("Floor", new Color(0.22f, 0.22f, 0.22f));
             var wallMat = CreateMat("Wall", new Color(0.32f, 0.30f, 0.28f));
@@ -103,7 +102,7 @@ namespace Kndra.Tools
                 floor.name = "Floor";
                 floor.transform.SetParent(st, false);
                 floor.GetComponent<Renderer>().sharedMaterial = floorMat;
-                MakeStatic(floor);
+                GameObjectUtility.SetStaticEditorFlags(floor, StaticEditorFlags.ContributeGI);
 
                 var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 wall.name = "Back Wall";
@@ -111,7 +110,7 @@ namespace Kndra.Tools
                 wall.transform.localPosition = new Vector3(0f, 2f, -3.5f);
                 wall.transform.localScale = new Vector3(8f, 4f, 0.2f);
                 wall.GetComponent<Renderer>().sharedMaterial = wallMat;
-                MakeStatic(wall);
+                GameObjectUtility.SetStaticEditorFlags(wall, StaticEditorFlags.ContributeGI);
 
                 // Dynamic reference sphere: lit the same way an avatar is (probes + realtime lights)
                 var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -145,15 +144,12 @@ namespace Kndra.Tools
             sunGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             var sun = sunGO.AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1f;
             sun.lightmapBakeType = LightmapBakeType.Realtime;
             sunGO.SetActive(false);
 
-            EditorSceneManager.SaveScene(scene, ScenePath);
-
             // Fast, low-resolution bake settings (we only care about light probes)
             AssetDatabase.DeleteAsset(SettingsPath);
-            var ls = new LightingSettings { name = "LightingTestSettings" };
+            var ls = new LightingSettings();
             ls.bakedGI = true;
             ls.realtimeGI = false;
             ls.autoGenerate = false;
@@ -166,8 +162,7 @@ namespace Kndra.Tools
             AssetDatabase.CreateAsset(ls, SettingsPath);
             Lightmapping.lightingSettings = ls;
 
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
         }
 
         // ---------------------------------------------------------------- Move avatar between stations
@@ -302,11 +297,6 @@ namespace Kndra.Tools
             return mat;
         }
 
-        static void MakeStatic(GameObject go)
-        {
-            GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.ContributeGI);
-        }
-
         static void AddLamp(Transform parent, string name, Vector3 localPos, Color color, float intensity,
                             LightmapBakeType bake, LightRenderMode mode, Material bulbMat)
         {
@@ -363,7 +353,6 @@ namespace Kndra.Tools
             tm.fontSize = 48;
             tm.characterSize = 0.05f;
             tm.anchor = TextAnchor.MiddleCenter;
-            tm.color = Color.white;
             go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
         }
     }
