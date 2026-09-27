@@ -45,18 +45,20 @@ jobs:
             exit 1
           fi
 
-      # The package goes in package/, next to a throwaway Unity project that references it
+      # GameCI needs the workspace root to be the git checkout
       - uses: actions/checkout@v4
-        with:
-          path: package
 
+      # Throwaway Unity project with a copy of this package embedded in its Packages/ folder
       - name: Create test project
-        run: cp -r package/.github/test-project TestProject
+        run: |
+          cp -r .github/test-project TestProject
+          mkdir -p TestProject/Packages/com.kndra.tools
+          git ls-files -z | grep -zv '^\.' | xargs -0 cp --parents -t TestProject/Packages/com.kndra.tools/
 
       - uses: actions/cache@v4
         with:
           path: TestProject/Library
-          key: Library-${{ hashFiles('package/**/*.cs', 'package/**/*.asmdef', 'package/.github/test-project/**') }}
+          key: Library-${{ hashFiles('**/*.cs', '**/*.asmdef', '.github/test-project/**') }}
           restore-keys: Library-
 
       - name: Run tests
@@ -78,12 +80,12 @@ jobs:
           name: test-results
           path: ${{ steps.tests.outputs.artifactsPath }}
 
-      # Unity writes a .meta for every file it imports; any new one here was never committed
+      # Unity writes a .meta for every file it imports; any in the embedded copy that the repo lacks was never committed
       - name: Check for missing .meta files
         if: always() && steps.tests.outcome != 'skipped'
-        working-directory: package
+        working-directory: TestProject/Packages/com.kndra.tools
         run: |
-          missing=$(git -c safe.directory='*' ls-files --others --exclude-standard -- '*.meta')
+          missing=$(find . -name '*.meta' -printf '%P\n' | while IFS= read -r f; do [ -e "$GITHUB_WORKSPACE/$f" ] || echo "$f"; done)
           if [ -n "$missing" ]; then
             echo "::error::Unity generated .meta files that are not committed. Commit these files (contents below):"
             echo "$missing" | while IFS= read -r f; do echo "----- $f"; cat "$f"; done

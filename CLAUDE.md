@@ -89,7 +89,7 @@ Every branch push (except pushes that only change Markdown or the licence) runs 
 
 - **Build .unitypackage** (seconds, no Unity): runs the release build script (see Releasing), which fails if any file or folder is missing its `.meta`.
 - **Edit Mode tests** (several minutes, needs the Unity licence secrets):
-  1. It copies `.github/test-project/` to a throwaway Unity project whose `Packages/manifest.json` installs this package from disk (`file:../../package`) and marks it testable.
+  1. It copies `.github/test-project/` to a throwaway Unity project, copies this package into that project's `Packages/com.kndra.tools/` (an embedded package), and marks it testable in `Packages/manifest.json`.
   2. [GameCI's unity-test-runner](https://game-ci.com/docs/github/test-runner) opens the project in a headless Unity editor, compiles everything and runs the Edit Mode tests. Results appear as the **Edit Mode test results** check on the commit and as a `test-results` artifact.
   3. It fails if Unity had to generate any `.meta` file that isn't committed, and prints the generated files so they can be committed as they are.
 
