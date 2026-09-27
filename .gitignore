@@ -1,0 +1,6 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+*.swp
