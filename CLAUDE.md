@@ -159,6 +159,12 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - Several selected objects are all moved to the same spot.
   - The Progressive GPU lightmapper falls back to CPU (slower) on unsupported GPUs.
   - Versions before Kndra tools wrote to `Assets/LightingTestScene/`. That folder can be deleted.
+- **Reading the results:** some differences between shaders are their default settings, not bugs. lilToon defaults checked against its shader source (Lighting section of the material):
+  - B: lilToon ignores vertex lights by default (Vertex Light Strength 0), so it looks like D at station B. Standard and other shaders are lit.
+  - D: in a Linear colour space project (as VRChat uses) the ambient colour is about 0.005 in linear terms, below lilToon's Light Min Limit (0.05), so lilToon renders brighter than Standard there. This shows each shader's minimum brightness.
+  - Bright lamps: lilToon caps light at Light Max Limit (1); Standard does not.
+  - Shadows and reflections aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0), and with no skybox or reflection probe every reflection and environment-based effect sees black.
+  - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
 <!--
 Template:
@@ -177,6 +183,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-27: Lighting Test Scene review: added station F (red/blue split lighting), a bake test that checks each station's probes, tighter unit tests, and notes on reading results with lilToon. Ideas not done yet: stations for overbright light, two overlapping pixel lights (lilToon's add pass blends with Max by default, so they don't add up), a lamp behind/below the avatar, realtime shadows and a reflection probe; a contact sheet that renders every station per material into one image.
 - 2026-09-27: Added Lighting Test Scene (0.2.0), ported from a standalone script. Changes from the draft: Kndra menu, namespace and output folder; moving is limited to the test scene; the anchor check counts renderers without an Anchor Override as separate sample points; a running bake is cancelled before rebuilding. Build and check logic split into internal methods (`BuildScene`, `MoveToStation`, `AnalyseRenderers`) so they can be tested without dialogs.
 - 2026-09-27: Added releases: pushing a `v*` tag publishes a `.unitypackage` (built by a script, no Unity) holding only `package.json` and the `Editor/` scripts, installed into `Packages/com.kndra.tools/`. Importing it into a real project hasn't been tried yet.
 - 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
