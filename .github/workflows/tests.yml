@@ -1,0 +1,102 @@
+# Compiles the package in Unity and runs its Edit Mode tests. Full docs: CLAUDE.md > Testing.
+name: Tests
+
+on:
+  push:
+    # Branches only: a release tag points at a commit that was already tested
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - '**.md.meta'
+      - 'LICENSE*'
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  # Fast, no Unity licence needed: builds the release .unitypackage, which fails on missing .meta files,
+  # and uploads it so any commit can be downloaded and tried in Unity
+  package:
+    name: Build .unitypackage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/scripts/build_unitypackage.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unitypackage
+          path: kndra-tools-*.unitypackage
+          if-no-files-found: error
+          retention-days: 14
+
+  editmode:
+    name: Edit Mode tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check Unity license secrets
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -z "$UNITY_LICENSE" ] || [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ]; then
+            echo "::error::UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD repository secrets are required. See CLAUDE.md > Testing."
+            exit 1
+          fi
+
+      # GameCI needs the workspace root to be the git checkout
+      - uses: actions/checkout@v4
+
+      # Throwaway Unity project with a copy of this package embedded in its Packages/ folder
+      - name: Create test project
+        run: |
+          cp -r .github/test-project TestProject
+          # Unity only opens a folder as a project if it has Assets/ (git can't store the empty folder)
+          mkdir -p TestProject/Assets TestProject/Packages/com.kndra.tools
+          git ls-files -z | grep -zv '^\.' | xargs -0 cp --parents -t TestProject/Packages/com.kndra.tools/
+
+      - uses: actions/cache@v4
+        with:
+          path: TestProject/Library
+          key: Library-${{ hashFiles('**/*.cs', '**/*.asmdef', '.github/test-project/**') }}
+          restore-keys: Library-
+
+      - name: Run tests
+        id: tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: TestProject
+          testMode: editmode
+          githubToken: ${{ github.token }}
+          checkName: Edit Mode test results
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.tests.outcome != 'skipped'
+        with:
+          name: test-results
+          path: ${{ steps.tests.outputs.artifactsPath }}
+
+      # Unity writes a .meta for every file it imports; any in the embedded copy that the repo lacks was never committed
+      - name: Check for missing .meta files
+        if: always() && steps.tests.outcome != 'skipped'
+        working-directory: TestProject/Packages/com.kndra.tools
+        run: |
+          missing=$(find . -name '*.meta' -printf '%P\n' | while IFS= read -r f; do [ -e "$GITHUB_WORKSPACE/$f" ] || echo "$f"; done)
+          if [ -n "$missing" ]; then
+            echo "::error::Unity generated .meta files that are not committed. Commit these files (contents below):"
+            echo "$missing" | while IFS= read -r f; do echo "----- $f"; cat "$f"; done
+            exit 1
+          fi
+          echo "All .meta files are committed."

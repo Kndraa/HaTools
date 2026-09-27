@@ -1,0 +1,34 @@
+# Pushing a tag like v0.2.0 builds a .unitypackage and publishes it as a GitHub Release. Full docs: CLAUDE.md > Releasing.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches package.json version
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version} (expected v${version})."
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Build .unitypackage
+        run: python3 .github/scripts/build_unitypackage.py
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" "kndra-tools-${VERSION}.unitypackage" --title "Kndra tools ${VERSION}" --generate-notes

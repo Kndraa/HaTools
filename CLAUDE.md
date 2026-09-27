@@ -48,7 +48,17 @@ Editor/
   Kndra.Tools.Editor.asmdef  Editor-only assembly for all scripts
   Core/
     KndraMenu.cs             Shared menu root constant
+    AssemblyInfo.cs          Lets the tests see internal members
   Tools/                     <- all tools live here, one file (or subfolder) each
+Tests/Editor/
+  Kndra.Tools.Editor.Tests.asmdef  Test assembly (only compiled when the package is "testable")
+  CoreTests.cs               Checks shared conventions (menu root, namespace)
+  <ToolName>Tests.cs         One test file per tool
+.github/
+  workflows/tests.yml        CI: compiles the package in Unity and runs the tests
+  workflows/release.yml      Publishes a .unitypackage when a version tag is pushed
+  scripts/build_unitypackage.py  Builds the .unitypackage (no Unity needed)
+  test-project/              Throwaway Unity project the CI installs the package into
 ```
 
 ## Conventions
@@ -69,8 +79,49 @@ Editor/
 3. Use `KndraMenu.Root` for the menu path.
 4. Add a section for the tool under **Tools** below.
 5. Add one line for the tool under **Tools** in `README.md`.
-6. Open the package in Unity once so `.meta` files are generated, and commit them.
-7. Bump `version` in `package.json` (see Versioning).
+6. Where practical, add `Tests/Editor/<ToolName>Tests.cs` (see Testing).
+7. Open the package in Unity once so `.meta` files are generated, and commit them.
+8. Bump `version` in `package.json` (see Versioning).
+
+## Testing
+
+Every branch push (except pushes that only change Markdown or the licence) runs `.github/workflows/tests.yml` on GitHub Actions. It has two jobs:
+
+- **Build .unitypackage** (seconds, no Unity): runs the release build script (see Releasing), which fails if any file or folder is missing its `.meta`. The result is uploaded as the `unitypackage` artifact (kept 14 days), so any commit can be downloaded from its run page and imported into Unity for testing. GitHub wraps artifacts in a `.zip`; unzip it to get the `.unitypackage`.
+- **Edit Mode tests** (several minutes, needs the Unity licence secrets):
+  1. It copies `.github/test-project/` to a throwaway Unity project, copies this package into that project's `Packages/com.kndra.tools/` (an embedded package), and marks it testable in `Packages/manifest.json`.
+  2. [GameCI's unity-test-runner](https://game-ci.com/docs/github/test-runner) opens the project in a headless Unity editor, compiles everything and runs the Edit Mode tests. Results appear as the **Edit Mode test results** check on the commit and as a `test-results` artifact.
+  3. It fails if Unity had to generate any `.meta` file that isn't committed, and prints the generated files so they can be committed as they are.
+
+**Unity version:** `.github/test-project/ProjectSettings/ProjectVersion.txt` (2022.3.22f1, the VRChat version). Change it there when VRChat moves to a new version.
+
+**One-time setup (repository owner):** the runner needs a Unity licence. A free Personal licence works:
+
+1. Sign in to Unity Hub on your own computer so it activates a Personal licence.
+2. Find the licence file: Windows `C:\ProgramData\Unity\Unity_lic.ulf`, macOS `/Library/Application Support/Unity/Unity_lic.ulf`, Linux `~/.local/share/unity3d/Unity/Unity_lic.ulf`.
+3. On GitHub, go to the repository's **Settings > Secrets and variables > Actions** and add three repository secrets: `UNITY_LICENSE` (the whole contents of that file), `UNITY_EMAIL` and `UNITY_PASSWORD` (your Unity account). Never paste these into a chat or commit them.
+
+Until the secrets exist, every run fails straight away at the "Check Unity license secrets" step.
+
+**Writing tests:**
+
+- One file per tool: `Tests/Editor/<ToolName>Tests.cs`, namespace `Kndra.Tools.Tests`, using NUnit (`[Test]`).
+- Tests can't click dialogs. Keep dialogs in the thin menu method and put the real work in `internal` methods that the tests call (`AssemblyInfo.cs` makes `internal` members visible to the test assembly).
+- Clean up anything a test creates on disk (for example `Assets/Kndra tools/<ToolName>/`) in a `[TearDown]`.
+- The tests are only compiled when the package is listed under `testables` (the CI project does this), so they never reach users' projects.
+- Runs take several minutes and use the repository's GitHub Actions minutes. Pushes to the same branch cancel the previous run.
+
+## Releasing
+
+Releases are a single `.unitypackage` attached to a GitHub Release. It contains only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. It installs into `Packages/com.kndra.tools/`, so Unity treats it as a real package and Package Manager shows its name and version.
+
+1. Bump `version` in `package.json` (see Versioning) and merge to `main`. Wait for the tests to pass.
+2. Tag that commit with the same version and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
+3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds `kndra-tools-<version>.unitypackage` and creates the GitHub Release with generated notes.
+
+`.github/scripts/build_unitypackage.py` builds the package without Unity. It takes `package.json` and the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. The same commit always gives a byte-identical file. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
+
+While the repository is private, only people with access to it can download releases. Importing a newer `.unitypackage` updates the files in place, but files removed from the package stay behind; delete `Packages/com.kndra.tools` before importing if a release removed or renamed files.
 
 ## Versioning
 
@@ -84,7 +135,36 @@ Semantic versioning in `package.json`:
 
 Full documentation for each tool. One `###` section per tool, in alphabetical order.
 
-_No tools yet._
+### Lighting Test Scene
+
+- **File:** `Editor/Tools/LightingTestScene.cs`
+- **Tests:** `Tests/Editor/LightingTestSceneTests.cs`. `LightingTestSceneTests`: scene contents, station lights, moving with Undo and scene safety, renderer check. `LightingTestSceneBakeTests`: bakes the scene (CPU lightmapper, since CI has no GPU) and reads each station's light probes to check the stations really differ: baked lamps light A, E and F, realtime lamps B and C stay out of the probes, A is warm and E neutral, F is red on one side and blue on the other. Takes longer than the other tests.
+- **Menu:** Tools > Kndra tools > Lighting Test Scene > Build Scene and Bake / Move Selection to Station A-F / Check Selected Avatar Renderers
+- **Purpose:** see how an avatar's shaders (lilToon, Poiyomi, ...) react to the kinds of world lighting found in VRChat, without uploading or launching VRChat.
+- **How it works:**
+  1. *Build Scene and Bake* offers to save the open scene, then creates a new scene at `Assets/Kndra tools/LightingTestScene/LightingTest.unity` (asks first if one already exists) with six stations 15 m apart on the X axis:
+     - A: baked warm point lamp. The avatar only receives it through light probes.
+     - B: realtime warm lamp, render mode Not Important (vertex light).
+     - C: realtime warm lamp, render mode Important (pixel light).
+     - D: no lamp, only the dim flat ambient of a dark world.
+     - E: baked neutral white lamp, as a colour reference for A.
+     - F: baked red lamp on the avatar's left (-X) and blue lamp on its right (+X). The probes then hold light that changes with direction. A shader that shades by direction shows a red side and a blue side; one that flattens probe light into a single colour (lilToon averages it and works out one light direction) shows a mix.
+     Each station has a static floor and back wall, a grid of 125 light probes, a label and a dynamic grey reference sphere that is lit the same way an avatar is. There is no skybox, and an optional realtime sun is included but disabled (turning it on lights every station). The tool writes its materials and a fast, low-resolution `LightingTestSettings.lighting` asset (Progressive GPU) into the same folder, then starts an async bake.
+  2. Drag the avatar into the test scene, select it, and use *Move Selection to Station X*. It moves the selected root objects to that station (facing +Z, with Undo) and frames the Scene view on the avatar's face.
+  3. *Check Selected Avatar Renderers* (works in any scene) lists every renderer's light probe usage, Anchor Override and shaders in the Console, and warns when renderers sample lighting from different points or don't use Blend Probes. Either problem makes parts of an avatar look lit differently in VRChat.
+- **Settings / options:** none. Edit the lamp colours, intensities and positions in the code if needed.
+- **Caveats / known issues:**
+  - Rebuilding deletes and recreates everything in `Assets/Kndra tools/LightingTestScene/`, and cancels a bake that is still running.
+  - Moving only works on objects that are inside the test scene, so the avatar in the user's own scene is never moved.
+  - Several selected objects are all moved to the same spot.
+  - The Progressive GPU lightmapper falls back to CPU (slower) on unsupported GPUs.
+  - Versions before Kndra tools wrote to `Assets/LightingTestScene/`. That folder can be deleted.
+- **Reading the results:** some differences between shaders are their default settings, not bugs. lilToon defaults checked against its shader source (Lighting section of the material):
+  - B: lilToon ignores vertex lights by default (Vertex Light Strength 0), so it looks like D at station B. Standard and other shaders are lit.
+  - D: in a Linear colour space project (as VRChat uses) the ambient colour is about 0.005 in linear terms, below lilToon's Light Min Limit (0.05), so lilToon renders brighter than Standard there. This shows each shader's minimum brightness.
+  - Bright lamps: lilToon caps light at Light Max Limit (1); Standard does not.
+  - Shadows and reflections aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0), and with no skybox or reflection probe every reflection and environment-based effect sees black.
+  - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
 <!--
 Template:
@@ -103,7 +183,10 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-27: Lighting Test Scene review: added station F (red/blue split lighting), a bake test that checks each station's probes, tighter unit tests, and notes on reading results with lilToon. Ideas not done yet: stations for overbright light, two overlapping pixel lights (lilToon's add pass blends with Max by default, so they don't add up), a lamp behind/below the avatar, realtime shadows and a reflection probe; a contact sheet that renders every station per material into one image.
+- 2026-09-27: Added Lighting Test Scene (0.2.0), ported from a standalone script. Changes from the draft: Kndra menu, namespace and output folder; moving is limited to the test scene; the anchor check counts renderers without an Anchor Override as separate sample points; a running bake is cancelled before rebuilding. Build and check logic split into internal methods (`BuildScene`, `MoveToStation`, `AnalyseRenderers`) so they can be tested without dialogs.
+- 2026-09-27: Added releases: pushing a `v*` tag publishes a `.unitypackage` (built by a script, no Unity) holding only `package.json` and the `Editor/` scripts, installed into `Packages/com.kndra.tools/`. Importing it into a real project hasn't been tried yet.
+- 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
-- Idea: Lighting Test Scene tool (builds a scene with baked, vertex, pixel and ambient-only lighting stations to compare shaders such as lilToon and Poiyomi outside VRChat). A first draft exists; not yet added.
 - Idea: Material comparison tool (show two materials' lighting settings side by side).

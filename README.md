@@ -11,11 +11,12 @@ A lightweight, editor-only Unity package of small scripts that run quickly. They
 ## Installation
 
 - **VRChat Creator Companion:** coming soon.
+- **.unitypackage:** download `kndra-tools-<version>.unitypackage` from the latest [release](../../releases) and open it in Unity (**Assets > Import Package > Custom Package...**). It installs into `Packages/com.kndra.tools`.
 - **Manual:** copy this repository into your project's `Packages/com.kndra.tools` folder.
 
 ## Tools
 
-No tools yet.
+- **Lighting Test Scene**: builds a scene with baked, vertex, pixel, ambient-only and red/blue split lighting stations so you can check how your avatar's shaders look under VRChat world lighting, plus a check of your renderers' light probe and Anchor Override settings.
 
 ## Contributing
 
