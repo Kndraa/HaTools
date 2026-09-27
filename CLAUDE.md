@@ -113,15 +113,15 @@ Until the secrets exist, every run fails straight away at the "Check Unity licen
 
 ## Releasing
 
-Releases are a single `.unitypackage` attached to a GitHub Release. It contains only the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition), installed into `Assets/Kndra tools/Editor/`. No `package.json`, README, licence, tests or docs. Without a `package.json` Unity doesn't treat it as a package, so it goes under `Assets/` instead of `Packages/`.
+Releases are a single `.unitypackage` attached to a GitHub Release. It contains only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. It installs into `Packages/com.kndra.tools/`, so Unity treats it as a real package and Package Manager shows its name and version.
 
 1. Bump `version` in `package.json` (see Versioning) and merge to `main`. Wait for the tests to pass.
 2. Tag that commit with the same version and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
 3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds `kndra-tools-<version>.unitypackage` and creates the GitHub Release with generated notes.
 
-`.github/scripts/build_unitypackage.py` builds the package without Unity. It takes the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. The `Assets/Kndra tools` folder itself has no `.meta` in the repo, so its GUID is fixed in the script. The same commit always gives a byte-identical file. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
+`.github/scripts/build_unitypackage.py` builds the package without Unity. It takes `package.json` and the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. The same commit always gives a byte-identical file. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
 
-While the repository is private, only people with access to it can download releases. A project must not have both the `.unitypackage` and the package (`Packages/com.kndra.tools`) installed: the two copies would clash.
+While the repository is private, only people with access to it can download releases. Importing a newer `.unitypackage` updates the files in place, but files removed from the package stay behind; delete `Packages/com.kndra.tools` before importing if a release removed or renamed files.
 
 ## Versioning
 
@@ -177,7 +177,7 @@ Template:
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
 - 2026-09-27: Added Lighting Test Scene (0.2.0), ported from a standalone script. Changes from the draft: Kndra menu, namespace and output folder; moving is limited to the test scene; the anchor check counts renderers without an Anchor Override as separate sample points; a running bake is cancelled before rebuilding. Build and check logic split into internal methods (`BuildScene`, `MoveToStation`, `AnalyseRenderers`) so they can be tested without dialogs.
-- 2026-09-27: Added releases: pushing a `v*` tag publishes a `.unitypackage` (built by a script, no Unity) holding only the `Editor/` scripts, installed into `Assets/Kndra tools/Editor/`. Importing it into a real project hasn't been tried yet.
+- 2026-09-27: Added releases: pushing a `v*` tag publishes a `.unitypackage` (built by a script, no Unity) holding only `package.json` and the `Editor/` scripts, installed into `Packages/com.kndra.tools/`. Importing it into a real project hasn't been tried yet.
 - 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
