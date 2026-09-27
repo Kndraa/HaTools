@@ -1,8 +1,8 @@
-# Kndra tools
+# HaTool
 
 Various tools useful for avatar creation in VRChat.
 
-A lightweight, editor-only Unity package of small scripts that run quickly. They help you test and optimise avatars without launching VRChat, and speed up everyday avatar workflow. Everything appears in Unity under **Tools > Kndra tools**. Nothing from this package is included in avatar uploads.
+A lightweight, editor-only Unity package of small scripts that run quickly. They help you test and optimise avatars without launching VRChat, and speed up everyday avatar workflow. Everything appears in Unity under **Tools > HaTool**. Nothing from this package is included in avatar uploads.
 
 ## Requirements
 
@@ -11,8 +11,8 @@ A lightweight, editor-only Unity package of small scripts that run quickly. They
 ## Installation
 
 - **VRChat Creator Companion:** coming soon.
-- **.unitypackage:** download `kndra-tools-<version>.unitypackage` from the latest [release](../../releases) and open it in Unity (**Assets > Import Package > Custom Package...**). It installs into `Packages/com.kndra.tools`.
-- **Manual:** copy this repository into your project's `Packages/com.kndra.tools` folder.
+- **.unitypackage:** download `HaTool-<version>.unitypackage` from the latest [release](../../releases) and open it in Unity (**Assets > Import Package > Custom Package...**). It installs into `Packages/com.kndra.hatool`.
+- **Manual:** copy this repository into your project's `Packages/com.kndra.hatool` folder.
 
 ## Tools
 

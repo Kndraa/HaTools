@@ -7,7 +7,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Kndra.Tools.Tests
+namespace HaTool.Tests
 {
     public class LightingTestSceneTests
     {

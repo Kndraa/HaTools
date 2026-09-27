@@ -34,6 +34,6 @@
     "com.unity.modules.xr": "1.0.0"
   },
   "testables": [
-    "com.kndra.tools"
+    "com.kndra.hatool"
   ]
 }
