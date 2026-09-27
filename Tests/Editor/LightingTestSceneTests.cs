@@ -17,7 +17,9 @@ namespace Kndra.Tools.Tests
         public void BuildOnce() => LightingTestScene.BuildScene();
 
         [OneTimeTearDown]
-        public void RemoveGeneratedAssets()
+        public void RemoveGeneratedAssets() => RemoveGenerated();
+
+        internal static void RemoveGenerated()
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             AssetDatabase.DeleteAsset(LightingTestScene.Folder);
@@ -193,6 +195,62 @@ namespace Kndra.Tools.Tests
             new GameObject("Particles", typeof(ParticleSystem)).transform.SetParent(root.transform, false);
 
             Assert.AreEqual(0, LightingTestScene.AnalyseRenderers(root).Renderers);
+        }
+    }
+
+    // Bakes the scene once and checks each station's light probes give the lighting its name promises
+    public class LightingTestSceneBakeTests
+    {
+        [OneTimeSetUp]
+        public void BuildAndBake()
+        {
+            LightingTestScene.BuildScene();
+            // CI machines have no GPU; the CPU lightmapper also gives the same result on every machine
+            Lightmapping.lightingSettings.lightmapper = LightingSettings.Lightmapper.ProgressiveCPU;
+            Assert.IsTrue(Lightmapping.Bake(), "Bake failed");
+        }
+
+        [OneTimeTearDown]
+        public void RemoveGeneratedAssets() => LightingTestSceneTests.RemoveGenerated();
+
+        // Baked light reaching a surface at avatar chest height, facing the given direction
+        static Color Irradiance(int station, Vector3 normal)
+        {
+            LightProbes.GetInterpolatedProbe(LightingTestScene.StationPos(station) + Vector3.up * 1.2f, null, out var sh);
+            var result = new Color[1];
+            sh.Evaluate(new[] { normal }, result);
+            return result[0];
+        }
+
+        static Color Front(int station) => Irradiance(station, Vector3.forward); // the lamps are in front
+
+        [Test]
+        public void BakedLampsLightTheirStations()
+        {
+            float dark = Front(3).grayscale;
+            Assert.Greater(Front(0).grayscale, dark * 3f, "A: baked lamp should be much brighter than D");
+            Assert.Greater(Front(4).grayscale, dark * 3f, "E: baked lamp should be much brighter than D");
+        }
+
+        [Test]
+        public void RealtimeLampsAreNotBakedIntoProbes()
+        {
+            // B and C get their lamp at runtime only, so their probes hold the same ambient as D.
+            // This also catches light leaking in from the neighbouring stations.
+            float dark = Front(3).grayscale;
+            Assert.Less(Front(1).grayscale, dark * 1.5f + 1e-4f, "B");
+            Assert.Less(Front(2).grayscale, dark * 1.5f + 1e-4f, "C");
+        }
+
+        [Test]
+        public void WarmLampIsWarmAndWhiteLampIsNeutral()
+        {
+            var a = Front(0);
+            Assert.Greater(a.r, a.b * 1.5f, $"A should be warm: {a}");
+
+            var e = Front(4);
+            float max = Mathf.Max(e.r, e.g, e.b), min = Mathf.Min(e.r, e.g, e.b);
+            Assert.Less(max, min * 1.25f, $"E should be neutral: {e}");
         }
     }
 }

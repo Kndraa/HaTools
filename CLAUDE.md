@@ -138,7 +138,7 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
 ### Lighting Test Scene
 
 - **File:** `Editor/Tools/LightingTestScene.cs`
-- **Tests:** `Tests/Editor/LightingTestSceneTests.cs` (scene contents, station lights, moving with Undo and scene safety, renderer check). Baking isn't tested.
+- **Tests:** `Tests/Editor/LightingTestSceneTests.cs`. `LightingTestSceneTests`: scene contents, station lights, moving with Undo and scene safety, renderer check. `LightingTestSceneBakeTests`: bakes the scene (CPU lightmapper, since CI has no GPU) and reads each station's light probes to check the stations really differ: baked lamps light A and E, realtime lamps B and C stay out of the probes, A is warm and E neutral. Takes longer than the other tests.
 - **Menu:** Tools > Kndra tools > Lighting Test Scene > Build Scene and Bake / Move Selection to Station A-E / Check Selected Avatar Renderers
 - **Purpose:** see how an avatar's shaders (lilToon, Poiyomi, ...) react to the kinds of world lighting found in VRChat, without uploading or launching VRChat.
 - **How it works:**
