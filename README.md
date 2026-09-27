@@ -2,7 +2,7 @@
 
 Various tools useful for avatar creation in VRChat.
 
-A lightweight, editor-only Unity package of small scripts that run quickly. Everything appears in Unity under **Tools > Kndra tools**. Nothing from this package is included in avatar uploads.
+A lightweight, editor-only Unity package of small scripts that run quickly. They help you test and optimise avatars without launching VRChat, and speed up everyday avatar workflow. Everything appears in Unity under **Tools > Kndra tools**. Nothing from this package is included in avatar uploads.
 
 ## Requirements
 

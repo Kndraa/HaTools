@@ -6,6 +6,8 @@ Guide for Claude and other agents (and humans) working on this repository. Read 
 
 **Kndra tools** (`com.kndra.tools`) is a lightweight, editor-only Unity package of small tools for VRChat avatar creation. Every tool appears in Unity under **Tools > Kndra tools**.
 
+Purpose: let creators test and optimise avatars inside Unity without launching VRChat, and generally speed up the avatar workflow. A good tool either answers "how will this look or perform in VRChat?" from the editor, or removes a repetitive manual step.
+
 - Target: Unity 2022.3, Built-in Render Pipeline (the VRChat setup).
 - Editor-only: nothing here ships in avatar uploads or runs in-game.
 - Tools should be quick to run. Avoid long blocking operations; if one is unavoidable, show a progress bar and let the user cancel.
@@ -101,6 +103,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
 - Idea: Lighting Test Scene tool (builds a scene with baked, vertex, pixel and ambient-only lighting stations to compare shaders such as lilToon and Poiyomi outside VRChat). A first draft exists; not yet added.
 - Idea: Material comparison tool (show two materials' lighting settings side by side).
