@@ -122,6 +122,7 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
 ### Lighting Test Scene
 
 - **File:** `Editor/Tools/LightingTestScene.cs`
+- **Tests:** `Tests/Editor/LightingTestSceneTests.cs` (scene contents, station lights, moving with Undo and scene safety, renderer check). Baking isn't tested.
 - **Menu:** Tools > Kndra tools > Lighting Test Scene > Build Scene and Bake / Move Selection to Station A-E / Check Selected Avatar Renderers
 - **Purpose:** see how an avatar's shaders (lilToon, Poiyomi, ...) react to the kinds of world lighting found in VRChat, without uploading or launching VRChat.
 - **How it works:**
@@ -159,7 +160,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
-- 2026-09-27: Added Lighting Test Scene (0.2.0), ported from a standalone script. Changes from the draft: Kndra menu, namespace and output folder; moving is limited to the test scene; the anchor check counts renderers without an Anchor Override as separate sample points; a running bake is cancelled before rebuilding.
+- 2026-09-27: Added Lighting Test Scene (0.2.0), ported from a standalone script. Changes from the draft: Kndra menu, namespace and output folder; moving is limited to the test scene; the anchor check counts renderers without an Anchor Override as separate sample points; a running bake is cancelled before rebuilding. Build and check logic split into internal methods (`BuildScene`, `MoveToStation`, `AnalyseRenderers`) so they can be tested without dialogs.
 - 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.

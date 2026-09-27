@@ -19,13 +19,14 @@ namespace Kndra.Tools
         const string MenuMoveD = Menu + "Move Selection to Station D (dark ambient)";
         const string MenuMoveE = Menu + "Move Selection to Station E (white lamp)";
 
-        const string ParentFolder = "Assets/Kndra tools";
-        const string Folder = ParentFolder + "/LightingTestScene";
-        const string ScenePath = Folder + "/LightingTest.unity";
-        const string SettingsPath = Folder + "/LightingTestSettings.lighting";
+        internal const string ParentFolder = "Assets/Kndra tools";
+        internal const string Folder = ParentFolder + "/LightingTestScene";
+        internal const string ScenePath = Folder + "/LightingTest.unity";
+        internal const string SettingsPath = Folder + "/LightingTestSettings.lighting";
+        internal const string StationsRootName = "Lighting Test Stations";
         const float Spacing = 15f;
 
-        static readonly string[] StationNames =
+        internal static readonly string[] StationNames =
         {
             "A - Baked warm lamp (light probes only)",
             "B - Realtime warm lamp, Not Important (vertex light)",
@@ -36,7 +37,7 @@ namespace Kndra.Tools
 
         static readonly Color Warm = new Color(1f, 0.7f, 0.35f);
 
-        static Vector3 StationPos(int i) => new Vector3(i * Spacing, 0f, 0f);
+        internal static Vector3 StationPos(int i) => new Vector3(i * Spacing, 0f, 0f);
 
         // ---------------------------------------------------------------- Build
 
@@ -53,6 +54,19 @@ namespace Kndra.Tools
             // A bake still running for the old scene would write into the files we're about to replace
             if (Lightmapping.isRunning) Lightmapping.Cancel();
 
+            BuildScene();
+            Lightmapping.BakeAsync();
+            FrameStation(0);
+
+            EditorUtility.DisplayDialog("Lighting Test Scene",
+                "Scene built and baking has started (see the progress bar at the bottom right).\n\n" +
+                "Next: drag your avatar into this scene, select it, and use\n" +
+                "Tools > Kndra tools > Lighting Test Scene > Move Selection to Station ...", "OK");
+        }
+
+        // Creates and saves the scene, materials and lighting settings. No dialogs, no bake.
+        internal static void BuildScene()
+        {
             if (!AssetDatabase.IsValidFolder(ParentFolder)) AssetDatabase.CreateFolder("Assets", "Kndra tools");
             if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder(ParentFolder, "LightingTestScene");
 
@@ -70,7 +84,7 @@ namespace Kndra.Tools
             var warmBulb = CreateMat("BulbWarm", Warm, "Unlit/Color");
             var whiteBulb = CreateMat("BulbWhite", Color.white, "Unlit/Color");
 
-            var root = new GameObject("Lighting Test Stations");
+            var root = new GameObject(StationsRootName);
 
             for (int i = 0; i < StationNames.Length; i++)
             {
@@ -144,14 +158,6 @@ namespace Kndra.Tools
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
-
-            Lightmapping.BakeAsync();
-            FrameStation(0);
-
-            EditorUtility.DisplayDialog("Lighting Test Scene",
-                "Scene built and baking has started (see the progress bar at the bottom right).\n\n" +
-                "Next: drag your avatar into this scene, select it, and use\n" +
-                "Tools > Kndra tools > Lighting Test Scene > Move Selection to Station ...", "OK");
         }
 
         // ---------------------------------------------------------------- Move avatar between stations
@@ -171,9 +177,7 @@ namespace Kndra.Tools
 
         static void MoveTo(int i)
         {
-            // Only move objects inside the test scene, never the avatar in the user's own scene
-            var targets = Selection.transforms.Where(t => t.gameObject.scene.path == ScenePath).ToArray();
-            if (targets.Length == 0)
+            if (MoveToStation(Selection.transforms, i) == 0)
             {
                 EditorUtility.DisplayDialog("Lighting Test Scene",
                     "Select an object inside the lighting test scene.\n\n" +
@@ -181,6 +185,15 @@ namespace Kndra.Tools
                     "then drag your avatar into it.", "OK");
                 return;
             }
+            FrameStation(i);
+        }
+
+        // Moves the objects that are inside the test scene (never the avatar in the user's own scene).
+        // Returns how many were moved.
+        internal static int MoveToStation(IEnumerable<Transform> objects, int i)
+        {
+            var targets = objects.Where(t => t.gameObject.scene.path == ScenePath).ToArray();
+            if (targets.Length == 0) return 0;
 
             Undo.RecordObjects(targets, "Move to lighting station");
             foreach (var t in targets)
@@ -188,7 +201,7 @@ namespace Kndra.Tools
                 t.position = StationPos(i);
                 t.rotation = Quaternion.identity;
             }
-            FrameStation(i);
+            return targets.Length;
         }
 
         static void FrameStation(int i)
@@ -212,45 +225,58 @@ namespace Kndra.Tools
                 return;
             }
 
-            var renderers = go.GetComponentsInChildren<Renderer>(true)
-                .Where(r => !(r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer))
-                .ToArray();
-            if (renderers.Length == 0)
+            var report = AnalyseRenderers(go);
+            if (report.Renderers == 0)
             {
                 EditorUtility.DisplayDialog("Check Avatar: " + go.name, "No mesh renderers found under this object.", "OK");
                 return;
             }
 
+            Debug.Log("[Lighting Test] Renderer report for " + go.name + "\n" + report.Details);
+
+            var summary = new StringBuilder();
+            summary.AppendLine(report.SamplePoints > 1
+                ? $"[!] Renderers sample lighting from {report.SamplePoints} different points ({report.Unanchored} without an Anchor Override). Parts of the avatar can look mismatched. Set every renderer's Anchor Override to the same bone (e.g. Chest or Hips)."
+                : "OK: all renderers sample lighting from the same point.");
+            summary.AppendLine(report.ProbeWarnings > 0
+                ? $"[!] {report.ProbeWarnings} renderer(s) do not use 'Blend Probes' and will ignore light probes."
+                : "OK: all renderers use Blend Probes.");
+            summary.AppendLine("\nFull per-renderer list is in the Console.");
+            EditorUtility.DisplayDialog("Check Avatar: " + go.name, summary.ToString(), "OK");
+        }
+
+        internal class RendererReport
+        {
+            public int Renderers, SamplePoints, Unanchored, ProbeWarnings;
+            public string Details;
+        }
+
+        internal static RendererReport AnalyseRenderers(GameObject go)
+        {
+            var renderers = go.GetComponentsInChildren<Renderer>(true)
+                .Where(r => !(r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer))
+                .ToArray();
+
             // Renderers without an Anchor Override each sample from their own bounds centre,
             // so every one of them counts as a separate sample point
             var anchors = new HashSet<Transform>();
-            int unanchored = 0;
-            int probeWarnings = 0;
+            var report = new RendererReport { Renderers = renderers.Length };
             var sb = new StringBuilder();
 
             foreach (var r in renderers)
             {
                 if (r.probeAnchor != null) anchors.Add(r.probeAnchor);
-                else unanchored++;
+                else report.Unanchored++;
                 string shaders = string.Join(", ", r.sharedMaterials.Where(m => m != null).Select(m => m.shader.name).Distinct());
                 string anchor = r.probeAnchor != null ? r.probeAnchor.name : "NONE (uses its own bounds centre)";
                 bool badProbes = r.lightProbeUsage != LightProbeUsage.BlendProbes;
-                if (badProbes) probeWarnings++;
+                if (badProbes) report.ProbeWarnings++;
                 sb.AppendLine($"{(badProbes ? "[!] " : "")}{r.name}: probes={r.lightProbeUsage}, anchor={anchor}, shaders={shaders}");
             }
 
-            Debug.Log("[Lighting Test] Renderer report for " + go.name + "\n" + sb);
-
-            int samplePoints = anchors.Count + unanchored;
-            var summary = new StringBuilder();
-            summary.AppendLine(samplePoints > 1
-                ? $"[!] Renderers sample lighting from {samplePoints} different points ({unanchored} without an Anchor Override). Parts of the avatar can look mismatched. Set every renderer's Anchor Override to the same bone (e.g. Chest or Hips)."
-                : "OK: all renderers sample lighting from the same point.");
-            summary.AppendLine(probeWarnings > 0
-                ? $"[!] {probeWarnings} renderer(s) do not use 'Blend Probes' and will ignore light probes."
-                : "OK: all renderers use Blend Probes.");
-            summary.AppendLine("\nFull per-renderer list is in the Console.");
-            EditorUtility.DisplayDialog("Check Avatar: " + go.name, summary.ToString(), "OK");
+            report.SamplePoints = anchors.Count + report.Unanchored;
+            report.Details = sb.ToString();
+            return report;
         }
 
         // ---------------------------------------------------------------- Helpers
