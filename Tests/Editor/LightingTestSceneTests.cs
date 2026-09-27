@@ -52,7 +52,7 @@ namespace Kndra.Tools.Tests
         }
 
         [Test]
-        public void CreatesAllStationsWithLightProbes()
+        public void CreatesAllStationsWithProbesAroundTheAvatar()
         {
             var root = GameObject.Find(LightingTestScene.StationsRootName);
             Assert.IsNotNull(root);
@@ -63,7 +63,13 @@ namespace Kndra.Tools.Tests
                 var st = Station(i);
                 Assert.AreEqual(LightingTestScene.StationNames[i], st.name);
                 Assert.AreEqual(LightingTestScene.StationPos(i), st.position);
-                Assert.AreEqual(125, st.GetComponentInChildren<LightProbeGroup>().probePositions.Length, st.name);
+
+                // Probes must enclose an avatar standing at the station, or it gets lit by extrapolated probes
+                var probes = st.GetComponentInChildren<LightProbeGroup>().probePositions;
+                var bounds = new Bounds(probes[0], Vector3.zero);
+                foreach (var p in probes) bounds.Encapsulate(p);
+                Assert.IsTrue(bounds.Contains(new Vector3(-1f, 0.3f, -1f)) && bounds.Contains(new Vector3(1f, 2.1f, 1f)),
+                    $"{st.name}: probes span {bounds.min} to {bounds.max}");
             }
         }
 
@@ -95,7 +101,8 @@ namespace Kndra.Tools.Tests
         {
             var avatar = Create("Avatar");
             var start = new Vector3(1f, 2f, 3f);
-            avatar.transform.SetPositionAndRotation(start, Quaternion.Euler(0f, 90f, 0f));
+            var startRotation = Quaternion.Euler(0f, 90f, 0f);
+            avatar.transform.SetPositionAndRotation(start, startRotation);
 
             Undo.IncrementCurrentGroup();
             Assert.AreEqual(1, LightingTestScene.MoveToStation(new[] { avatar.transform }, 2));
@@ -104,6 +111,7 @@ namespace Kndra.Tools.Tests
 
             Undo.PerformUndo();
             Assert.AreEqual(start, avatar.transform.position);
+            Assert.Less(Quaternion.Angle(startRotation, avatar.transform.rotation), 0.01f);
         }
 
         [Test]
@@ -154,6 +162,19 @@ namespace Kndra.Tools.Tests
             var report = LightingTestScene.AnalyseRenderers(root);
             Assert.AreEqual(0, report.Unanchored);
             Assert.AreEqual(1, report.SamplePoints);
+        }
+
+        [Test]
+        public void RendererCheckCountsSharedAnchorAndUnanchoredRenderers()
+        {
+            var root = AvatarWithCubes(3);
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            renderers[0].probeAnchor = root.transform;
+            renderers[1].probeAnchor = root.transform;
+
+            var report = LightingTestScene.AnalyseRenderers(root);
+            Assert.AreEqual(1, report.Unanchored);
+            Assert.AreEqual(2, report.SamplePoints);
         }
 
         [Test]
