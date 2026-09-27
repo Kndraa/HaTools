@@ -20,7 +20,8 @@ permissions:
   checks: write
 
 jobs:
-  # Fast, no Unity licence needed: builds the release .unitypackage, which fails on missing .meta files
+  # Fast, no Unity licence needed: builds the release .unitypackage, which fails on missing .meta files,
+  # and uploads it so any commit can be downloaded and tried in Unity
   package:
     name: Build .unitypackage
     runs-on: ubuntu-latest
@@ -28,6 +29,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 .github/scripts/build_unitypackage.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unitypackage
+          path: kndra-tools-*.unitypackage
+          if-no-files-found: error
+          retention-days: 14
 
   editmode:
     name: Edit Mode tests

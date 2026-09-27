@@ -87,7 +87,7 @@ Tests/Editor/
 
 Every branch push (except pushes that only change Markdown or the licence) runs `.github/workflows/tests.yml` on GitHub Actions. It has two jobs:
 
-- **Build .unitypackage** (seconds, no Unity): runs the release build script (see Releasing), which fails if any file or folder is missing its `.meta`.
+- **Build .unitypackage** (seconds, no Unity): runs the release build script (see Releasing), which fails if any file or folder is missing its `.meta`. The result is uploaded as the `unitypackage` artifact (kept 14 days), so any commit can be downloaded from its run page and imported into Unity for testing. GitHub wraps artifacts in a `.zip`; unzip it to get the `.unitypackage`.
 - **Edit Mode tests** (several minutes, needs the Unity licence secrets):
   1. It copies `.github/test-project/` to a throwaway Unity project, copies this package into that project's `Packages/com.kndra.tools/` (an embedded package), and marks it testable in `Packages/manifest.json`.
   2. [GameCI's unity-test-runner](https://game-ci.com/docs/github/test-runner) opens the project in a headless Unity editor, compiles everything and runs the Edit Mode tests. Results appear as the **Edit Mode test results** check on the commit and as a `test-results` artifact.
