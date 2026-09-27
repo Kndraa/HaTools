@@ -34,8 +34,9 @@ namespace Kndra.Tools.Tests
         [Test]
         public void AllTypesUseKndraToolsNamespace()
         {
+            // Top-level types only (nested ones share their parent's namespace); skip compiler/Unity-generated ones
             var wrong = ToolsAssembly.GetTypes()
-                .Where(t => !t.IsDefined(typeof(CompilerGeneratedAttribute), false) && !t.Name.StartsWith("<"))
+                .Where(t => !t.IsNested && !t.IsDefined(typeof(CompilerGeneratedAttribute), false) && !t.Name.StartsWith("<"))
                 .Where(t => t.Namespace == null || !(t.Namespace == "Kndra.Tools" || t.Namespace.StartsWith("Kndra.Tools.")))
                 .Select(t => t.FullName)
                 .ToList();
