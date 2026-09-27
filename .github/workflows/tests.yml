@@ -52,7 +52,8 @@ jobs:
       - name: Create test project
         run: |
           cp -r .github/test-project TestProject
-          mkdir -p TestProject/Packages/com.kndra.tools
+          # Unity only opens a folder as a project if it has Assets/ (git can't store the empty folder)
+          mkdir -p TestProject/Assets TestProject/Packages/com.kndra.tools
           git ls-files -z | grep -zv '^\.' | xargs -0 cp --parents -t TestProject/Packages/com.kndra.tools/
 
       - uses: actions/cache@v4
