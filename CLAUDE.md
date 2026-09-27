@@ -138,16 +138,17 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
 ### Lighting Test Scene
 
 - **File:** `Editor/Tools/LightingTestScene.cs`
-- **Tests:** `Tests/Editor/LightingTestSceneTests.cs`. `LightingTestSceneTests`: scene contents, station lights, moving with Undo and scene safety, renderer check. `LightingTestSceneBakeTests`: bakes the scene (CPU lightmapper, since CI has no GPU) and reads each station's light probes to check the stations really differ: baked lamps light A and E, realtime lamps B and C stay out of the probes, A is warm and E neutral. Takes longer than the other tests.
-- **Menu:** Tools > Kndra tools > Lighting Test Scene > Build Scene and Bake / Move Selection to Station A-E / Check Selected Avatar Renderers
+- **Tests:** `Tests/Editor/LightingTestSceneTests.cs`. `LightingTestSceneTests`: scene contents, station lights, moving with Undo and scene safety, renderer check. `LightingTestSceneBakeTests`: bakes the scene (CPU lightmapper, since CI has no GPU) and reads each station's light probes to check the stations really differ: baked lamps light A, E and F, realtime lamps B and C stay out of the probes, A is warm and E neutral, F is red on one side and blue on the other. Takes longer than the other tests.
+- **Menu:** Tools > Kndra tools > Lighting Test Scene > Build Scene and Bake / Move Selection to Station A-F / Check Selected Avatar Renderers
 - **Purpose:** see how an avatar's shaders (lilToon, Poiyomi, ...) react to the kinds of world lighting found in VRChat, without uploading or launching VRChat.
 - **How it works:**
-  1. *Build Scene and Bake* offers to save the open scene, then creates a new scene at `Assets/Kndra tools/LightingTestScene/LightingTest.unity` (asks first if one already exists) with five stations 15 m apart on the X axis:
+  1. *Build Scene and Bake* offers to save the open scene, then creates a new scene at `Assets/Kndra tools/LightingTestScene/LightingTest.unity` (asks first if one already exists) with six stations 15 m apart on the X axis:
      - A: baked warm point lamp. The avatar only receives it through light probes.
      - B: realtime warm lamp, render mode Not Important (vertex light).
      - C: realtime warm lamp, render mode Important (pixel light).
      - D: no lamp, only the dim flat ambient of a dark world.
      - E: baked neutral white lamp, as a colour reference for A.
+     - F: baked red lamp on the avatar's left (-X) and blue lamp on its right (+X). The probes then hold light that changes with direction. A shader that shades by direction shows a red side and a blue side; one that flattens probe light into a single colour (lilToon averages it and works out one light direction) shows a mix.
      Each station has a static floor and back wall, a grid of 125 light probes, a label and a dynamic grey reference sphere that is lit the same way an avatar is. There is no skybox, and an optional realtime sun is included but disabled (turning it on lights every station). The tool writes its materials and a fast, low-resolution `LightingTestSettings.lighting` asset (Progressive GPU) into the same folder, then starts an async bake.
   2. Drag the avatar into the test scene, select it, and use *Move Selection to Station X*. It moves the selected root objects to that station (facing +Z, with Undo) and frames the Scene view on the avatar's face.
   3. *Check Selected Avatar Renderers* (works in any scene) lists every renderer's light probe usage, Anchor Override and shaders in the Console, and warns when renderers sample lighting from different points or don't use Blend Probes. Either problem makes parts of an avatar look lit differently in VRChat.

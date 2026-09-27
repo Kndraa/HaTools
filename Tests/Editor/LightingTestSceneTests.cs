@@ -87,6 +87,10 @@ namespace Kndra.Tools.Tests
             Assert.AreEqual(LightRenderMode.ForcePixel, LampAt(2).renderMode, "C: pixel light");
             Assert.IsNull(LampAt(3), "D: ambient only");
             Assert.AreEqual(LightmapBakeType.Baked, LampAt(4).lightmapBakeType, "E: baked lamp");
+
+            var f = Station(5).GetComponentsInChildren<Light>();
+            Assert.AreEqual(2, f.Length, "F: two lamps");
+            Assert.IsTrue(f.All(l => l.lightmapBakeType == LightmapBakeType.Baked), "F: both baked");
         }
 
         [Test]
@@ -230,6 +234,7 @@ namespace Kndra.Tools.Tests
             float dark = Front(3).grayscale;
             Assert.Greater(Front(0).grayscale, dark * 3f, "A: baked lamp should be much brighter than D");
             Assert.Greater(Front(4).grayscale, dark * 3f, "E: baked lamp should be much brighter than D");
+            Assert.Greater(Front(5).grayscale, dark * 3f, "F: baked lamps should be much brighter than D");
         }
 
         [Test]
@@ -251,6 +256,15 @@ namespace Kndra.Tools.Tests
             var e = Front(4);
             float max = Mathf.Max(e.r, e.g, e.b), min = Mathf.Min(e.r, e.g, e.b);
             Assert.Less(max, min * 1.25f, $"E should be neutral: {e}");
+        }
+
+        [Test]
+        public void SplitStationIsRedOnTheLeftAndBlueOnTheRight()
+        {
+            var left = Irradiance(5, Vector3.left);
+            var right = Irradiance(5, Vector3.right);
+            Assert.Greater(left.r, left.b, $"F: side facing -X should be red: {left}");
+            Assert.Greater(right.b, right.r, $"F: side facing +X should be blue: {right}");
         }
     }
 }

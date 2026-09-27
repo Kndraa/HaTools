@@ -16,7 +16,7 @@ A lightweight, editor-only Unity package of small scripts that run quickly. They
 
 ## Tools
 
-- **Lighting Test Scene**: builds a scene with baked, vertex, pixel and ambient-only lighting stations so you can check how your avatar's shaders look under VRChat world lighting, plus a check of your renderers' light probe and Anchor Override settings.
+- **Lighting Test Scene**: builds a scene with baked, vertex, pixel, ambient-only and red/blue split lighting stations so you can check how your avatar's shaders look under VRChat world lighting, plus a check of your renderers' light probe and Anchor Override settings.
 
 ## Contributing
 

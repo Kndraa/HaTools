@@ -18,6 +18,7 @@ namespace Kndra.Tools
         const string MenuMoveC = Menu + "Move Selection to Station C (pixel light)";
         const string MenuMoveD = Menu + "Move Selection to Station D (dark ambient)";
         const string MenuMoveE = Menu + "Move Selection to Station E (white lamp)";
+        const string MenuMoveF = Menu + "Move Selection to Station F (red and blue lamps)";
 
         internal const string ParentFolder = "Assets/Kndra tools";
         internal const string Folder = ParentFolder + "/LightingTestScene";
@@ -33,9 +34,12 @@ namespace Kndra.Tools
             "C - Realtime warm lamp, Important (pixel light)",
             "D - Dark world, ambient only",
             "E - Neutral white baked lamp",
+            "F - Red and blue baked lamps (split lighting)",
         };
 
         static readonly Color Warm = new Color(1f, 0.7f, 0.35f);
+        static readonly Color Red = new Color(1f, 0.15f, 0.1f);
+        static readonly Color Blue = new Color(0.15f, 0.3f, 1f);
 
         internal static Vector3 StationPos(int i) => new Vector3(i * Spacing, 0f, 0f);
 
@@ -83,6 +87,8 @@ namespace Kndra.Tools
             var refMat = CreateMat("ReferenceSphere", new Color(0.8f, 0.8f, 0.8f));
             var warmBulb = CreateMat("BulbWarm", Warm, "Unlit/Color");
             var whiteBulb = CreateMat("BulbWhite", Color.white, "Unlit/Color");
+            var redBulb = CreateMat("BulbRed", Red, "Unlit/Color");
+            var blueBulb = CreateMat("BulbBlue", Blue, "Unlit/Color");
 
             var root = new GameObject(StationsRootName);
 
@@ -127,6 +133,10 @@ namespace Kndra.Tools
                     case 2: AddLamp(st, "Warm Lamp (Realtime, Important)", lampPos, Warm, 2.5f, LightmapBakeType.Realtime, LightRenderMode.ForcePixel, warmBulb); break;
                     case 3: break; // ambient only
                     case 4: AddLamp(st, "White Lamp (Baked)", lampPos, Color.white, 2f, LightmapBakeType.Baked, LightRenderMode.Auto, whiteBulb); break;
+                    case 5: // avatar's left (-X) red, right (+X) blue: shows whether a shader keeps the light's direction
+                        AddLamp(st, "Red Lamp (Baked)", new Vector3(-2f, 1.6f, 1.5f), Red, 2.5f, LightmapBakeType.Baked, LightRenderMode.Auto, redBulb);
+                        AddLamp(st, "Blue Lamp (Baked)", new Vector3(2f, 1.6f, 1.5f), Blue, 2.5f, LightmapBakeType.Baked, LightRenderMode.Auto, blueBulb);
+                        break;
                 }
             }
 
@@ -167,12 +177,14 @@ namespace Kndra.Tools
         [MenuItem(MenuMoveC, priority = 22)] static void MoveC() => MoveTo(2);
         [MenuItem(MenuMoveD, priority = 23)] static void MoveD() => MoveTo(3);
         [MenuItem(MenuMoveE, priority = 24)] static void MoveE() => MoveTo(4);
+        [MenuItem(MenuMoveF, priority = 25)] static void MoveF() => MoveTo(5);
 
         [MenuItem(MenuMoveA, true)]
         [MenuItem(MenuMoveB, true)]
         [MenuItem(MenuMoveC, true)]
         [MenuItem(MenuMoveD, true)]
         [MenuItem(MenuMoveE, true)]
+        [MenuItem(MenuMoveF, true)]
         static bool HasSelection() => Selection.activeTransform != null;
 
         static void MoveTo(int i)
