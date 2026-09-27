@@ -48,7 +48,15 @@ Editor/
   Kndra.Tools.Editor.asmdef  Editor-only assembly for all scripts
   Core/
     KndraMenu.cs             Shared menu root constant
+    AssemblyInfo.cs          Lets the tests see internal members
   Tools/                     <- all tools live here, one file (or subfolder) each
+Tests/Editor/
+  Kndra.Tools.Editor.Tests.asmdef  Test assembly (only compiled when the package is "testable")
+  CoreTests.cs               Checks shared conventions (menu root, namespace)
+  <ToolName>Tests.cs         One test file per tool
+.github/
+  workflows/tests.yml        CI: compiles the package in Unity and runs the tests
+  test-project/              Throwaway Unity project the CI installs the package into
 ```
 
 ## Conventions
@@ -69,8 +77,35 @@ Editor/
 3. Use `KndraMenu.Root` for the menu path.
 4. Add a section for the tool under **Tools** below.
 5. Add one line for the tool under **Tools** in `README.md`.
-6. Open the package in Unity once so `.meta` files are generated, and commit them.
-7. Bump `version` in `package.json` (see Versioning).
+6. Where practical, add `Tests/Editor/<ToolName>Tests.cs` (see Testing).
+7. Open the package in Unity once so `.meta` files are generated, and commit them.
+8. Bump `version` in `package.json` (see Versioning).
+
+## Testing
+
+Every push (except pushes that only change Markdown or the licence) runs `.github/workflows/tests.yml` on GitHub Actions:
+
+1. It copies `.github/test-project/` to a throwaway Unity project whose `Packages/manifest.json` installs this package from disk (`file:../../package`) and marks it testable.
+2. [GameCI's unity-test-runner](https://game-ci.com/docs/github/test-runner) opens the project in a headless Unity editor, compiles everything and runs the Edit Mode tests. Results appear as the **Edit Mode test results** check on the commit and as a `test-results` artifact.
+3. It fails if Unity had to generate any `.meta` file that isn't committed, and prints the generated files so they can be committed as they are.
+
+**Unity version:** `.github/test-project/ProjectSettings/ProjectVersion.txt` (2022.3.22f1, the VRChat version). Change it there when VRChat moves to a new version.
+
+**One-time setup (repository owner):** the runner needs a Unity licence. A free Personal licence works:
+
+1. Sign in to Unity Hub on your own computer so it activates a Personal licence.
+2. Find the licence file: Windows `C:\ProgramData\Unity\Unity_lic.ulf`, macOS `/Library/Application Support/Unity/Unity_lic.ulf`, Linux `~/.local/share/unity3d/Unity/Unity_lic.ulf`.
+3. On GitHub, go to the repository's **Settings > Secrets and variables > Actions** and add three repository secrets: `UNITY_LICENSE` (the whole contents of that file), `UNITY_EMAIL` and `UNITY_PASSWORD` (your Unity account). Never paste these into a chat or commit them.
+
+Until the secrets exist, every run fails straight away at the "Check Unity license secrets" step.
+
+**Writing tests:**
+
+- One file per tool: `Tests/Editor/<ToolName>Tests.cs`, namespace `Kndra.Tools.Tests`, using NUnit (`[Test]`).
+- Tests can't click dialogs. Keep dialogs in the thin menu method and put the real work in `internal` methods that the tests call (`AssemblyInfo.cs` makes `internal` members visible to the test assembly).
+- Clean up anything a test creates on disk (for example `Assets/Kndra tools/<ToolName>/`) in a `[TearDown]`.
+- The tests are only compiled when the package is listed under `testables` (the CI project does this), so they never reach users' projects.
+- Runs take several minutes and use the repository's GitHub Actions minutes. Pushes to the same branch cancel the previous run.
 
 ## Versioning
 
@@ -103,6 +138,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
 - Idea: Lighting Test Scene tool (builds a scene with baked, vertex, pixel and ambient-only lighting stations to compare shaders such as lilToon and Poiyomi outside VRChat). A first draft exists; not yet added.
