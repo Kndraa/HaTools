@@ -1,6 +1,6 @@
 {
-  "name": "com.kndra.hatool",
-  "displayName": "HaTool",
+  "name": "com.kndra.hatools",
+  "displayName": "HaTools",
   "version": "0.3.0",
   "unity": "2022.3",
   "description": "Various tools useful for avatar creation",

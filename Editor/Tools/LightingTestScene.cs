@@ -8,11 +8,11 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace HaTool
+namespace HaTools
 {
     public static class LightingTestScene
     {
-        const string Menu = HaToolMenu.Root + "Lighting Test Scene/";
+        const string Menu = HaToolsMenu.Root + "Lighting Test Scene/";
         const string MenuMoveA = Menu + "Move Selection to Station A (baked lamp)";
         const string MenuMoveB = Menu + "Move Selection to Station B (vertex light)";
         const string MenuMoveC = Menu + "Move Selection to Station C (pixel light)";
@@ -20,7 +20,7 @@ namespace HaTool
         const string MenuMoveE = Menu + "Move Selection to Station E (white lamp)";
         const string MenuMoveF = Menu + "Move Selection to Station F (red and blue lamps)";
 
-        internal const string ParentFolder = "Assets/HaTool";
+        internal const string ParentFolder = "Assets/HaTools";
         internal const string Folder = ParentFolder + "/LightingTestScene";
         internal const string ScenePath = Folder + "/LightingTest.unity";
         internal const string SettingsPath = Folder + "/LightingTestSettings.lighting";
@@ -65,13 +65,13 @@ namespace HaTool
             EditorUtility.DisplayDialog("Lighting Test Scene",
                 "Scene built and baking has started (see the progress bar at the bottom right).\n\n" +
                 "Next: drag your avatar into this scene, select it, and use\n" +
-                "Tools > HaTool > Lighting Test Scene > Move Selection to Station ...", "OK");
+                "Tools > HaTools > Lighting Test Scene > Move Selection to Station ...", "OK");
         }
 
         // Creates and saves the scene, materials and lighting settings. No dialogs, no bake.
         internal static void BuildScene()
         {
-            if (!AssetDatabase.IsValidFolder(ParentFolder)) AssetDatabase.CreateFolder("Assets", "HaTool");
+            if (!AssetDatabase.IsValidFolder(ParentFolder)) AssetDatabase.CreateFolder("Assets", "HaTools");
             if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder(ParentFolder, "LightingTestScene");
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -188,7 +188,7 @@ namespace HaTool
             {
                 EditorUtility.DisplayDialog("Lighting Test Scene",
                     "Select an object inside the lighting test scene.\n\n" +
-                    "Build it with Tools > HaTool > Lighting Test Scene > Build Scene and Bake, " +
+                    "Build it with Tools > HaTools > Lighting Test Scene > Build Scene and Bake, " +
                     "then drag your avatar into it.", "OK");
                 return;
             }

@@ -32,7 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: unitypackage
-          path: HaTool-*.unitypackage
+          path: HaTools-*.unitypackage
           if-no-files-found: error
           retention-days: 14
 
@@ -60,8 +60,8 @@ jobs:
         run: |
           cp -r .github/test-project TestProject
           # Unity only opens a folder as a project if it has Assets/ (git can't store the empty folder)
-          mkdir -p TestProject/Assets TestProject/Packages/com.kndra.hatool
-          git ls-files -z | grep -zv '^\.' | xargs -0 cp --parents -t TestProject/Packages/com.kndra.hatool/
+          mkdir -p TestProject/Assets TestProject/Packages/com.kndra.hatools
+          git ls-files -z | grep -zv '^\.' | xargs -0 cp --parents -t TestProject/Packages/com.kndra.hatools/
 
       - uses: actions/cache@v4
         with:
@@ -91,7 +91,7 @@ jobs:
       # Unity writes a .meta for every file it imports; any in the embedded copy that the repo lacks was never committed
       - name: Check for missing .meta files
         if: always() && steps.tests.outcome != 'skipped'
-        working-directory: TestProject/Packages/com.kndra.hatool
+        working-directory: TestProject/Packages/com.kndra.hatools
         run: |
           missing=$(find . -name '*.meta' -printf '%P\n' | while IFS= read -r f; do [ -e "$GITHUB_WORKSPACE/$f" ] || echo "$f"; done)
           if [ -n "$missing" ]; then

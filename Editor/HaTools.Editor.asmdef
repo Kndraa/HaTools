@@ -1,6 +1,6 @@
 {
-    "name": "HaTool.Editor",
-    "rootNamespace": "HaTool",
+    "name": "HaTools.Editor",
+    "rootNamespace": "HaTools",
     "references": [],
     "includePlatforms": [
         "Editor"
