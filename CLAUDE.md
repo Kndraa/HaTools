@@ -81,7 +81,7 @@ Tests/Editor/
 5. Add one line for the tool under **Tools** in `README.md`.
 6. Where practical, add `Tests/Editor/<ToolName>Tests.cs` (see Testing).
 7. Open the package in Unity once so `.meta` files are generated, and commit them.
-8. Bump `version` in `package.json` (see Versioning).
+8. Don't bump `version` in `package.json`: it only changes when releasing (see Versioning).
 
 ## Testing
 
@@ -115,7 +115,7 @@ Until the secrets exist, every run fails straight away at the "Check Unity licen
 
 Releases are a single `.unitypackage` attached to a GitHub Release. It contains only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. It installs into `Packages/com.kndra.hatools/`, so Unity treats it as a real package and Package Manager shows its name and version.
 
-1. Bump `version` in `package.json` (see Versioning) and merge to `main`. Wait for the tests to pass.
+1. Bump `version` in `package.json` (see Versioning) in a commit of its own and merge it to `main`. Wait for the tests to pass.
 2. Tag that commit with the same version and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
 3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds `HaTools-<version>.unitypackage` and creates the GitHub Release with generated notes.
 
@@ -125,7 +125,7 @@ While the repository is private, only people with access to it can download rele
 
 ## Versioning
 
-Semantic versioning in `package.json`:
+Semantic versioning in `package.json`. The version is bumped only when releasing, never in a tool or feature branch, so parallel branches don't all edit the same line. Pick the bump from everything merged since the last release:
 
 - Patch (`0.1.x`): bug fixes.
 - Minor (`0.x.0`): new tools or new features in a tool.
@@ -207,9 +207,9 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
-- 2026-09-28: Added Shader Fallback Preview (0.4.0): a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
+- 2026-09-28: Versions are bumped only when releasing, not in each tool branch: every branch bumping `package.json` made parallel branches conflict on the same line.
+- 2026-09-28: Added Shader Fallback Preview: a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
 - 2026-09-28: Compile check without Unity (cloud sessions): Unity 2022.3.22f1's compiler, .NET runtime and reference DLLs can be taken from GameCI's `unityci/editor:ubuntu-2022.3.22f1-base-3` image through `mirror.gcr.io` (Unity's own download servers are blocked; Docker Hub rate-limits). Only the needed files are extracted from the 3.7 GB layer (about 180 MB), outside the repo, and never committed (Unity licence). Tests that don't call the engine (pure C# logic) can also run with NUnit's .NET Standard build; the rest need the CI.
-
 - 2026-09-27: Renamed the project from "Kndra tools" to HaTools (0.3.0): package id `com.kndra.hatools`, namespace `HaTools`, assemblies `HaTools.Editor` / `HaTools.Editor.Tests`, menu `Tools/HaTools/`, shared class `HaToolsMenu`, output folder `Assets/HaTools/`, release file `HaTools-<version>.unitypackage`. A minor bump rather than major because nothing had been released yet. Projects with the old package must delete `Packages/com.kndra.tools` before installing.
 - 2026-09-27: Tool ideas reviewed. Dropped a texture memory report and a performance stats estimate (avatar projects always load the VRChat SDK, which already reports both) and a missing reference finder. The ideas kept are listed at the end of these notes.
 - 2026-09-27: Lighting Test Scene review: added station F (red/blue split lighting), a bake test that checks each station's probes, tighter unit tests, and notes on reading results with lilToon. Ideas not done yet: stations for overbright light, two overlapping pixel lights (lilToon's add pass blends with Max by default, so they don't add up), a lamp behind/below the avatar, realtime shadows and a reflection probe; a contact sheet that renders every station per material into one image.
