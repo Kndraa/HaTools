@@ -166,6 +166,30 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - Shadows and reflections aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0), and with no skybox or reflection probe every reflection and environment-based effect sees black.
   - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
+### Shader Fallback Preview
+
+- **File:** `Editor/Tools/ShaderFallbackPreview.cs`
+- **Tests:** `Tests/Editor/ShaderFallbackPreviewTests.cs`: the fallback rules for tags and shader names (plain C#, no engine calls), the fallback materials (shader, copied texture, Standard rendering mode, Hidden), and the preview copy (unsaved, beside the avatar, one fallback per material, no scripts, clean removal that never destroys the avatar's own materials).
+- **Menu:** Tools > HaTools > Shader Fallback Preview (opens a window)
+- **Purpose:** see the avatar the way other players see it when they have its shaders blocked (VRChat's Safety settings), without launching VRChat.
+- **How it works:**
+  1. Pick the avatar in the scene in the window's *Avatar* field (it starts with the current selection).
+  2. *Create Fallback Preview* copies the avatar next to the original (to its left, one avatar width plus 0.5 m away), swaps every material on the copy for its fallback, and points the Scene view camera straight at the copy's front (avatars face +Z), showing all of it. The window lists each material with its shader, the fallback VRChat picks, the Unity shader used to show it, and any caveat.
+  3. *Remove Preview and Restore Camera* deletes the copy and its fallback materials and puts the Scene view camera back where it was before the first preview. Closing the window, entering Play mode or closing the scene removes the preview too. *Recreate* rebuilds the copy (for example after changing a material) and keeps the saved camera.
+- **Fallback rules** (from VRChat's "Shader Blocking and Fallback System" page, `vrchat-community/creator-docs`, `Docs/docs/avatars/shader-fallback-system.md`):
+  - *With a `VRCFallback` tag* (read with `Material.GetTag`, so a per-material override tag counts too): the tag picks the type (`Unlit`, `VertexLit`, `Toon`, `MobileToon`, `Particle`, `Sprite`, `Matcap`, otherwise Standard) and the mode (`Cutout`, `Fade`, `Transparent`, plus `DoubleSided` for Toon). `Hidden` hides the mesh. `toonstandard` and `toonstandardoutline` use `VRChat/Mobile/Toon Standard (Outline)` with every same-named property and keyword. The Standard shader properties (`_MainTex`, `_Color`, `_BumpMap`, `_EmissionMap`, ...) are copied.
+  - *Without a tag:* a material using one of the shaders VRChat has built in (Standard, the Legacy shaders, `Sprites/Default`, `Toon/Lit`, ...) keeps it unchanged. Otherwise the shader name is searched (case-sensitive) for `Sprite`, `Particle`, `MatCap`, `Toon`, `Unlit`, `VertexLit` (type, first match wins) and `Cutout`, `Fade`, `Transparent` (mode); a `_Ramp` property means Toon, and the `_ALPHATEST_ON` / `_ALPHABLEND_ON` keywords mean Cutout / Transparent. Only `_MainTex` and `_Color` are copied (plus `_Ramp` and `_MatCap`).
+  - Toon with Transparent or Fade becomes Unlit Transparent: there is no transparent Toon fallback.
+- **Preview shaders:** Unlit, VertexLit, Sprite and Standard use the matching Unity built-in shaders (Standard gets the same blend, depth and keyword settings as its inspector sets for the mode). MobileToon, Matcap and Toon Standard use the VRChat SDK's `VRChat/Mobile/...` shaders; without the SDK the preview shows Standard and says so. Hidden uses an invisible Standard cutout material.
+- **Settings / options:** none.
+- **Caveats / known issues:**
+  - Approximations: VRChat's own Toon fallback isn't available in Unity, so Toon uses `VRChat/Mobile/Toon Lit` (Cutout: `Legacy Shaders/Transparent/Cutout/Diffuse`) and double-sided faces and outlines aren't shown. Particle uses `Legacy Shaders/Particles/Alpha Blended`. A shader without `_MainTex` and `_Color` shows as Standard, while VRChat shows a matcap in the viewer's trust rank colour. The docs don't say which type wins when a name matches several words, so the order above is a guess.
+  - The docs were last updated in 2022 and VRChat says the system may change. Check the result in VRChat with the Action Menu's *Options > Avatar > Fallback Shaders* toggle when it matters.
+  - Keywords (normal map, emission) aren't turned on in fallback materials, since new materials start without them; whether VRChat enables them isn't documented.
+  - The copy has no scripts (VRChat SDK components, PhysBones, Modular Avatar, ...), so the SDK and other tools don't treat it as a second avatar. Its pose is the avatar's current pose.
+  - The copy and its materials are `DontSave`, so they never end up in the scene file, and no Undo is recorded for them (removing the preview is the undo). Creating it still marks the scene as modified.
+  - The camera is the last active Scene view. Without one open, the copy is still made but the camera isn't moved.
+
 <!--
 Template:
 
@@ -183,6 +207,9 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-28: Added Shader Fallback Preview (0.4.0): a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
+- 2026-09-28: Compile check without Unity (cloud sessions): Unity 2022.3.22f1's compiler, .NET runtime and reference DLLs can be taken from GameCI's `unityci/editor:ubuntu-2022.3.22f1-base-3` image through `mirror.gcr.io` (Unity's own download servers are blocked; Docker Hub rate-limits). Only the needed files are extracted from the 3.7 GB layer (about 180 MB), outside the repo, and never committed (Unity licence). Tests that don't call the engine (pure C# logic) can also run with NUnit's .NET Standard build; the rest need the CI.
+
 - 2026-09-27: Renamed the project from "Kndra tools" to HaTools (0.3.0): package id `com.kndra.hatools`, namespace `HaTools`, assemblies `HaTools.Editor` / `HaTools.Editor.Tests`, menu `Tools/HaTools/`, shared class `HaToolsMenu`, output folder `Assets/HaTools/`, release file `HaTools-<version>.unitypackage`. A minor bump rather than major because nothing had been released yet. Projects with the old package must delete `Packages/com.kndra.tools` before installing.
 - 2026-09-27: Tool ideas reviewed. Dropped a texture memory report and a performance stats estimate (avatar projects always load the VRChat SDK, which already reports both) and a missing reference finder. The ideas kept are listed at the end of these notes.
 - 2026-09-27: Lighting Test Scene review: added station F (red/blue split lighting), a bake test that checks each station's probes, tighter unit tests, and notes on reading results with lilToon. Ideas not done yet: stations for overbright light, two overlapping pixel lights (lilToon's add pass blends with Max by default, so they don't add up), a lamp behind/below the avatar, realtime shadows and a reflection probe; a contact sheet that renders every station per material into one image.
@@ -192,7 +219,6 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
 - Planned: more Lighting Test Scene stations: overbright light, two overlapping pixel lights, a lamp behind or below the avatar, a reflection probe.
-- Idea: Shader fallback preview. Show the avatar with the shaders VRChat falls back to (Standard or Toon, from each material's fallback tag) when a viewer has shaders blocked, with one click to restore.
 - Idea: Bounds check. Skinned mesh bounds that are too small make parts of the avatar disappear at the edge of the view. Approach still to be discussed: simply setting one shared bounds and root bone on every renderer was judged a little redundant.
 - Idea: Lighting Test Scene contact sheet. Render every station for each material into one image grid (rows: materials, columns: stations A-F) to compare at a glance. To be discussed.
 - Idea: Anchor Override fixer, a fix button for Check Selected Avatar Renderers. Details to be written up later.
