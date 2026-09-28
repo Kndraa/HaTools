@@ -4,7 +4,7 @@
 # A .unitypackage is a .tar.gz with one folder per asset, named by the asset's GUID, holding:
 #   asset       the file itself (left out for folders)
 #   asset.meta  its .meta file
-#   pathname    where Unity puts it, e.g. Packages/com.kndra.tools/Editor/Core/KndraMenu.cs
+#   pathname    where Unity puts it, e.g. Packages/com.kndra.hatools/Editor/Core/HaToolsMenu.cs
 #
 # Only package.json and the scripts ship: everything under Editor/ (tools, shared menu, assembly definition).
 import gzip
@@ -33,7 +33,7 @@ def main():
     package = json.loads((ROOT / "package.json").read_text())
     # The package root folder has no .meta; Unity creates it on import
     install_dir = f"Packages/{package['name']}"
-    out = ROOT / f"kndra-tools-{package['version']}.unitypackage"
+    out = ROOT / f"HaTools-{package['version']}.unitypackage"
 
     tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True, text=True).stdout
     files = sorted(f for f in tracked.split("\0") if f and included(f) and not f.endswith(".meta"))

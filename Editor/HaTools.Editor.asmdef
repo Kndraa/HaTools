@@ -1,6 +1,6 @@
 {
-    "name": "Kndra.Tools.Editor",
-    "rootNamespace": "Kndra.Tools",
+    "name": "HaTools.Editor",
+    "rootNamespace": "HaTools",
     "references": [],
     "includePlatforms": [
         "Editor"

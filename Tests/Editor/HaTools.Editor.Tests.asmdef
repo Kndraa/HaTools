@@ -1,8 +1,8 @@
 {
-    "name": "Kndra.Tools.Editor.Tests",
-    "rootNamespace": "Kndra.Tools.Tests",
+    "name": "HaTools.Editor.Tests",
+    "rootNamespace": "HaTools.Tests",
     "references": [
-        "Kndra.Tools.Editor",
+        "HaTools.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
