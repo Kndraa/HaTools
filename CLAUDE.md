@@ -179,10 +179,27 @@ Template:
 - **Caveats / known issues:**
 -->
 
+### Root Bone and Anchor Fixer
+
+- **File:** `Editor/Tools/RootBoneAndAnchorFixer.cs`
+- **Tests:** `Tests/Editor/RootBoneAndAnchorFixerTests.cs`: the check (shared, different and missing root bones and anchors, particles ignored), the override (every renderer including disabled ones, Undo, empty fields left alone) and the bounds conversion when the root bone changes.
+- **Menu:** Tools > HaTools > Root Bone and Anchor Fixer (opens a window)
+- **Purpose:** give every renderer of an avatar the same root bone and the same light anchor (Anchor Override). Renderers that sample lighting from different points look lit differently in VRChat; mismatched root bones give skinned meshes bounds in different places.
+- **How it works:**
+  1. Pick the avatar in the scene in the *Avatar* field (it starts with the current selection).
+  2. *Check Root Bones and Light Anchors* shows the result right below the button: either that every renderer shares one root bone / anchor, or a list of each value with the renderers using it. Root bones only exist on skinned mesh renderers; light anchors are checked on mesh and skinned mesh renderers. A missing root bone or anchor never counts as shared, since each renderer then uses its own transform or bounds centre.
+  3. Reference the root bone and light anchor to use in the *Root Bone* and *Light Anchor* fields (both must be inside the avatar), then *Override All Renderers*. It sets them on every mesh and skinned mesh renderer, including ones on disabled objects, with Undo, and shows the check again. An empty field leaves that setting as it is.
+- **Settings / options:** none besides the two fields.
+- **Caveats / known issues:**
+  - Skinned mesh bounds are stored relative to the root bone, so when the root bone changes the bounds are converted to cover the same space as before (the box around the old box, which can be a little larger if the bones are rotated differently). Bounds that were already too small stay too small.
+  - Particle, trail and line renderers are left alone.
+  - Tools that change renderers when the avatar is built (for example Modular Avatar's Mesh Settings) can override these values in the uploaded avatar.
+
 ## Notes
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-28: Added Root Bone and Anchor Fixer (the "Anchor Override fixer" idea, widened to root bones). Built as its own tool, not a button in Lighting Test Scene's renderer check, since that tool is due for a full revision. The override converts skinned mesh bounds to the new root bone so they don't move.
 - 2026-09-27: Renamed the project from "Kndra tools" to HaTools (0.3.0): package id `com.kndra.hatools`, namespace `HaTools`, assemblies `HaTools.Editor` / `HaTools.Editor.Tests`, menu `Tools/HaTools/`, shared class `HaToolsMenu`, output folder `Assets/HaTools/`, release file `HaTools-<version>.unitypackage`. A minor bump rather than major because nothing had been released yet. Projects with the old package must delete `Packages/com.kndra.tools` before installing.
 - 2026-09-27: Tool ideas reviewed. Dropped a texture memory report and a performance stats estimate (avatar projects always load the VRChat SDK, which already reports both) and a missing reference finder. The ideas kept are listed at the end of these notes.
 - 2026-09-27: Lighting Test Scene review: added station F (red/blue split lighting), a bake test that checks each station's probes, tighter unit tests, and notes on reading results with lilToon. Ideas not done yet: stations for overbright light, two overlapping pixel lights (lilToon's add pass blends with Max by default, so they don't add up), a lamp behind/below the avatar, realtime shadows and a reflection probe; a contact sheet that renders every station per material into one image.
@@ -195,5 +212,4 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - Idea: Shader fallback preview. Show the avatar with the shaders VRChat falls back to (Standard or Toon, from each material's fallback tag) when a viewer has shaders blocked, with one click to restore.
 - Idea: Bounds check. Skinned mesh bounds that are too small make parts of the avatar disappear at the edge of the view. Approach still to be discussed: simply setting one shared bounds and root bone on every renderer was judged a little redundant.
 - Idea: Lighting Test Scene contact sheet. Render every station for each material into one image grid (rows: materials, columns: stations A-F) to compare at a glance. To be discussed.
-- Idea: Anchor Override fixer, a fix button for Check Selected Avatar Renderers. Details to be written up later.
 - Idea: Material comparison tool. Any two materials side by side, with the differences highlighted. Layout to be described later.
