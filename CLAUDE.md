@@ -154,7 +154,7 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   3. *Check Selected Avatar Renderers* (works in any scene) lists every renderer's light probe usage, Anchor Override and shaders in the Console, and warns when renderers sample lighting from different points or don't use Blend Probes. Either problem makes parts of an avatar look lit differently in VRChat.
 - **Settings / options:** none. Edit the lamp colours, intensities and positions in the code if needed.
 - **Caveats / known issues:**
-  - Rebuilding deletes and recreates everything in `Assets/HaTools/LightingTestScene/`, and cancels a bake that is still running.
+  - Rebuilding replaces the scene, its materials and `LightingTestSettings.lighting` in `Assets/HaTools/LightingTestScene/`, and cancels a bake that is still running. The previous bake's `LightingTest/` folder stays until the new bake replaces it; anything else in the folder is left alone.
   - Moving only works on objects that are inside the test scene, so the avatar in the user's own scene is never moved.
   - Several selected objects are all moved to the same spot.
   - The Progressive GPU lightmapper falls back to CPU (slower) on unsupported GPUs.
@@ -185,7 +185,7 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
 ### Shader Fallback Preview
 
 - **File:** `Editor/Tools/ShaderFallbackPreview.cs`
-- **Tests:** `Tests/Editor/ShaderFallbackPreviewTests.cs`: the fallback rules for tags and shader names (plain C#, no engine calls), the fallback materials (shader, copied texture, Standard rendering mode, Hidden), and the preview copy (unsaved, beside the avatar, one fallback per material, no scripts, clean removal that never destroys the avatar's own materials).
+- **Tests:** `Tests/Editor/ShaderFallbackPreviewTests.cs`: the fallback rules for tags and shader names (plain C#, no engine calls), the fallback materials (shader, copied texture, Standard rendering mode, Hidden, combined notes), and the preview copy (unsaved, beside the avatar, one fallback per material, no scripts, visible even under a disabled parent, clean removal that never destroys the avatar's own materials).
 - **Menu:** Tools > HaTools > Shader Fallback Preview (opens a window)
 - **Purpose:** see the avatar the way other players see it when they have its shaders blocked (VRChat's Safety settings), without launching VRChat.
 - **How it works:**
@@ -203,6 +203,7 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - The docs were last updated in 2022 and VRChat says the system may change. Check the result in VRChat with the Action Menu's *Options > Avatar > Fallback Shaders* toggle when it matters.
   - Keywords (normal map, emission) aren't turned on in fallback materials, since new materials start without them; whether VRChat enables them isn't documented.
   - The copy has no scripts (VRChat SDK components, PhysBones, Modular Avatar, ...), so the SDK and other tools don't treat it as a second avatar. Its pose is the avatar's current pose.
+  - The copy sits under the avatar's parent, unless that parent is disabled: then it goes to the scene root (same world position and size) so it can be seen.
   - The copy and its materials are `DontSave`, so they never end up in the scene file, and no Undo is recorded for them (removing the preview is the undo). Creating it still marks the scene as modified.
   - The camera is the last active Scene view. Without one open, the copy is still made but the camera isn't moved.
 
