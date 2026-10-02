@@ -17,6 +17,7 @@ A lightweight, editor-only Unity package of small scripts that run quickly. They
 ## Tools
 
 - **Lighting Test Scene**: builds a scene with baked, vertex, pixel, ambient-only and red/blue split lighting stations so you can check how your avatar's shaders look under VRChat world lighting, plus a check of your renderers' light probe and Anchor Override settings.
+- **Shader Fallback Preview**: shows a temporary copy of your avatar with the shaders VRChat falls back to when someone has your shaders blocked, with the Scene view camera in front of it, and lists what each material falls back to. One click removes it and puts the camera back.
 
 ## Contributing
 
