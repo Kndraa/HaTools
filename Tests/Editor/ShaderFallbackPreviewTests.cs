@@ -215,6 +215,20 @@ namespace HaTools.Tests
             StringAssert.Contains("VRChat SDK", entry.Note);
         }
 
+        [Test]
+        public void NotesAreCombinedNotReplaced()
+        {
+            if (Shader.Find("VRChat/Mobile/Toon Lit") != null) Assert.Ignore("VRChat SDK is installed.");
+            // "Toon" in the name picks the SDK's Toon Lit (missing here), and there is no _MainTex or _Color
+            var shader = Track(ShaderUtil.CreateShaderAsset("Shader \"HaTools Tests/Plain Toon\" { SubShader { Pass { } } }"));
+            var src = Track(new Material(shader) { name = "Test plain toon" });
+
+            var entry = new ShaderFallbackPreview.Entry();
+            Track(ShaderFallbackPreview.CreateFallbackMaterial(src, entry));
+            StringAssert.Contains("VRChat SDK", entry.Note);
+            StringAssert.Contains("matcap", entry.Note);
+        }
+
         // ---------------------------------------------------------------- Preview copy
 
         [Test]
@@ -266,6 +280,21 @@ namespace HaTools.Tests
             avatar.SetActive(false);
             var copy = Track(ShaderFallbackPreview.CreatePreview(avatar, new List<ShaderFallbackPreview.Entry>()));
             Assert.IsTrue(copy.activeSelf);
+        }
+
+        [Test]
+        public void AvatarUnderDisabledParentGivesVisibleCopy()
+        {
+            var parent = Track(new GameObject("Disabled parent"));
+            parent.transform.localScale = Vector3.one * 2f;
+            var avatar = Avatar(Mat("Standard"), Mat("Standard"));
+            avatar.transform.SetParent(parent.transform, false);
+            parent.SetActive(false);
+
+            var copy = Track(ShaderFallbackPreview.CreatePreview(avatar, new List<ShaderFallbackPreview.Entry>()));
+            Assert.IsTrue(copy.activeInHierarchy);
+            Assert.AreEqual(avatar.scene, copy.scene);
+            Assert.Less(Vector3.Distance(avatar.transform.lossyScale, copy.transform.lossyScale), 1e-4f, "The copy keeps the avatar's size");
         }
 
         class Required : MonoBehaviour { }

@@ -145,6 +145,8 @@ namespace HaTools
             var src = avatar.transform;
             var copy = Instantiate(avatar, src.parent);
             if (src.parent == null) SceneManager.MoveGameObjectToScene(copy, avatar.scene);
+            // Under a disabled parent the copy would stay hidden: move it to the scene root, keeping its world size
+            else if (!src.parent.gameObject.activeInHierarchy) copy.transform.SetParent(null, true);
             copy.name = avatar.name + CopySuffix;
             copy.SetActive(true);
             var size = RendererBounds(avatar).size;
@@ -354,7 +356,8 @@ namespace HaTools
                 var names = f.FromTag ? StandardProperties : new[] { "_MainTex", "_Color" };
                 CopyProperties(src, m, names.Concat(new[] { "_Ramp", "_MatCap" }));
                 if (!f.FromTag && !src.HasProperty("_MainTex") && !src.HasProperty("_Color"))
-                    note = "This shader has no _MainTex or _Color: VRChat shows a matcap in the viewer's trust rank colour instead.";
+                    note = (note != null ? note + "\n" : "") +
+                           "This shader has no _MainTex or _Color: VRChat shows a matcap in the viewer's trust rank colour instead.";
             }
 
             if (f.Kind == Kind.Hidden) SetHidden(m);
