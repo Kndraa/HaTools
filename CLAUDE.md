@@ -166,6 +166,22 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - Shadows and reflections aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0), and with no skybox or reflection probe every reflection and environment-based effect sees black.
   - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
+### Root Bone and Anchor Fixer
+
+- **File:** `Editor/Tools/RootBoneAndAnchorFixer.cs`
+- **Tests:** `Tests/Editor/RootBoneAndAnchorFixerTests.cs`: the check (shared, different and missing root bones and anchors, particles ignored), the override (every renderer including disabled ones, Undo, empty fields left alone) and the bounds conversion when the root bone changes.
+- **Menu:** Tools > HaTools > Root Bone and Anchor Fixer (opens a window)
+- **Purpose:** give every renderer of an avatar the same root bone and the same light anchor (Anchor Override). Renderers that sample lighting from different points look lit differently in VRChat; mismatched root bones give skinned meshes bounds in different places.
+- **How it works:**
+  1. Pick the avatar in the scene in the *Avatar* field (it starts with the current selection).
+  2. *Check Root Bones and Light Anchors* shows the result right below the button: either that every renderer shares one root bone / anchor, or a list of each value with the renderers using it. Root bones only exist on skinned mesh renderers; light anchors are checked on mesh and skinned mesh renderers. A missing root bone or anchor never counts as shared, since each renderer then uses its own transform or bounds centre.
+  3. Reference the root bone and light anchor to use in the *Root Bone* and *Light Anchor* fields (both must be inside the avatar), then *Override All Renderers*. It sets them on every mesh and skinned mesh renderer, including ones on disabled objects, with Undo, and shows the check again. An empty field leaves that setting as it is.
+- **Settings / options:** none besides the two fields.
+- **Caveats / known issues:**
+  - Skinned mesh bounds are stored relative to the root bone, so when the root bone changes the bounds are converted to cover the same space as before (the box around the old box, which can be a little larger if the bones are rotated differently). Bounds that were already too small stay too small.
+  - Particle, trail and line renderers are left alone.
+  - Tools that change renderers when the avatar is built (for example Modular Avatar's Mesh Settings) can override these values in the uploaded avatar.
+
 ### Shader Fallback Preview
 
 - **File:** `Editor/Tools/ShaderFallbackPreview.cs`
@@ -207,6 +223,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-09-28: Added Root Bone and Anchor Fixer (the "Anchor Override fixer" idea, widened to root bones). Built as its own tool, not a button in Lighting Test Scene's renderer check, since that tool is due for a full revision. The override converts skinned mesh bounds to the new root bone so they don't move.
 - 2026-09-28: Versions are bumped only when releasing, not in each tool branch: every branch bumping `package.json` made parallel branches conflict on the same line.
 - 2026-09-28: Added Shader Fallback Preview: a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
 - 2026-09-28: Compile check without Unity (cloud sessions): Unity 2022.3.22f1's compiler, .NET runtime and reference DLLs can be taken from GameCI's `unityci/editor:ubuntu-2022.3.22f1-base-3` image through `mirror.gcr.io` (Unity's own download servers are blocked; Docker Hub rate-limits). Only the needed files are extracted from the 3.7 GB layer (about 180 MB), outside the repo, and never committed (Unity licence). Tests that don't call the engine (pure C# logic) can also run with NUnit's .NET Standard build; the rest need the CI.
@@ -221,5 +238,4 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - Planned: more Lighting Test Scene stations: overbright light, two overlapping pixel lights, a lamp behind or below the avatar, a reflection probe.
 - Idea: Bounds check. Skinned mesh bounds that are too small make parts of the avatar disappear at the edge of the view. Approach still to be discussed: simply setting one shared bounds and root bone on every renderer was judged a little redundant.
 - Idea: Lighting Test Scene contact sheet. Render every station for each material into one image grid (rows: materials, columns: stations A-F) to compare at a glance. To be discussed.
-- Idea: Anchor Override fixer, a fix button for Check Selected Avatar Renderers. Details to be written up later.
 - Idea: Material comparison tool. Any two materials side by side, with the differences highlighted. Layout to be described later.
