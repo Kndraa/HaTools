@@ -1,30 +1,28 @@
-// Lighting Test Scene: builds a scene of VRChat-style lighting stations to check avatar shaders without running VRChat. Full docs: CLAUDE.md > Tools > Lighting Test Scene.
+// Lighting Test Scene: a window that takes a copy of an avatar into a baked scene of VRChat-style lighting stations and back to your own scene. Full docs: CLAUDE.md > Tools > Lighting Test Scene.
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 namespace HaTools
 {
-    public static class LightingTestScene
+    public class LightingTestScene : EditorWindow
     {
-        const string Menu = HaToolsMenu.Root + "Lighting Test Scene/";
-        const string MenuMoveA = Menu + "Move Selection to Station A (baked lamp)";
-        const string MenuMoveB = Menu + "Move Selection to Station B (vertex light)";
-        const string MenuMoveC = Menu + "Move Selection to Station C (pixel light)";
-        const string MenuMoveD = Menu + "Move Selection to Station D (dark ambient)";
-        const string MenuMoveE = Menu + "Move Selection to Station E (white lamp)";
-        const string MenuMoveF = Menu + "Move Selection to Station F (red and blue lamps)";
+        const string Title = "Lighting Test Scene";
 
         internal const string ParentFolder = "Assets/HaTools";
         internal const string Folder = ParentFolder + "/LightingTestScene";
         internal const string ScenePath = Folder + "/LightingTest.unity";
         internal const string SettingsPath = Folder + "/LightingTestSettings.lighting";
         internal const string StationsRootName = "Lighting Test Stations";
+        internal const string CopySuffix = " (Lighting Test Copy)";
+        // Per-project setting holding what to return to (see ReturnState)
+        internal const string ReturnKey = "HaTools.LightingTestScene.Return";
         const float Spacing = 15f;
 
         internal static readonly string[] StationNames =
@@ -37,44 +35,273 @@ namespace HaTools
             "F - Red and blue baked lamps (split lighting)",
         };
 
+        // What to look for at each station. lilToon's defaults: CLAUDE.md > Lighting Test Scene > Reading the results.
+        static readonly string[] StationNotes =
+        {
+            "The avatar is lit only through light probes, as in most VRChat worlds: there is no realtime light to give the shader a direction.",
+            "A vertex light. lilToon ignores vertex lights by default (Vertex Light Strength 0), so it looks like station D here.",
+            "A pixel light: the shader gets the light's direction and colour. lilToon caps bright light at Light Max Limit (1).",
+            "No lamp, only dim ambient light: shows the shader's minimum brightness (lilToon: Light Min Limit).",
+            "The same as A with a white lamp: the colour reference for A.",
+            "Red light from the avatar's left, blue from its right, both baked. A shader that keeps the direction of probe light shows a red side " +
+            "and a blue side; one that averages it (lilToon) shows a mix.",
+        };
+
         static readonly Color Warm = new Color(1f, 0.7f, 0.35f);
         static readonly Color Red = new Color(1f, 0.15f, 0.1f);
         static readonly Color Blue = new Color(0.15f, 0.3f, 1f);
 
         internal static Vector3 StationPos(int i) => new Vector3(i * Spacing, 0f, 0f);
 
-        // ---------------------------------------------------------------- Build
+        [MenuItem(HaToolsMenu.Root + Title)]
+        static void Open() => GetWindow<LightingTestScene>(Title);
 
-        [MenuItem(Menu + "Build Scene and Bake", priority = 0)]
-        public static void Build()
+        // ---------------------------------------------------------------- Window
+
+        [SerializeField] GameObject avatar;
+        [SerializeField] int station;
+
+        static bool InTestScene => SceneManager.GetActiveScene().path == ScenePath;
+
+        void OnEnable()
         {
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            if (File.Exists(ScenePath) &&
-                !EditorUtility.DisplayDialog("Lighting Test Scene",
-                    "A lighting test scene already exists. Rebuild it?\n(Your avatar and its scene are not touched.)",
-                    "Rebuild", "Cancel"))
-                return;
-
-            // A bake still running for the old scene would write into the files we're about to replace
-            if (Lightmapping.isRunning) Lightmapping.Cancel();
-
-            BuildScene();
-            Lightmapping.BakeAsync();
-            FrameStation(0);
-
-            EditorUtility.DisplayDialog("Lighting Test Scene",
-                "Scene built and baking has started (see the progress bar at the bottom right).\n\n" +
-                "Next: drag your avatar into this scene, select it, and use\n" +
-                "Tools > HaTools > Lighting Test Scene > Move Selection to Station ...", "OK");
+            if (avatar == null && Selection.activeGameObject != null && !EditorUtility.IsPersistent(Selection.activeGameObject))
+                avatar = Selection.activeGameObject;
         }
 
-        // Creates and saves the scene, materials and lighting settings. No dialogs, no bake.
-        internal static void BuildScene()
+        // Keeps the bake status and the buttons up to date while baking and after scene changes
+        void OnInspectorUpdate() => Repaint();
+
+        void OnGUI()
+        {
+            // Unity can't switch, save or bake scenes while playing
+            bool playing = EditorApplication.isPlayingOrWillChangePlaymode;
+            if (InTestScene) TestSceneGUI(playing);
+            else MainSceneGUI(playing);
+        }
+
+        void MainSceneGUI(bool playing)
+        {
+            EditorGUILayout.HelpBox("Shows how the avatar's shaders react to VRChat world lighting, in a separate baked scene. " +
+                                    "A copy of the avatar goes into the test scene; your own scene is closed and reopened when you return.", MessageType.None);
+
+            avatar = (GameObject)EditorGUILayout.ObjectField("Avatar", avatar, typeof(GameObject), true);
+            bool valid = avatar != null && !EditorUtility.IsPersistent(avatar);
+            if (avatar != null && !valid)
+                EditorGUILayout.HelpBox("Pick the avatar in the scene, not a prefab asset.", MessageType.Warning);
+
+            // Scene changes and dialogs run after OnGUI, not in the middle of it
+            bool exists = File.Exists(ScenePath);
+            using (new EditorGUI.DisabledScope(!valid || playing))
+                if (GUILayout.Button(exists ? "Open Test Scene" : "Create Test Scene and Bake", GUILayout.Height(28)))
+                    EditorApplication.delayCall += Enter;
+            using (new EditorGUI.DisabledScope(!exists || playing))
+                if (GUILayout.Button("Delete Test Scene", GUILayout.Height(28)))
+                    EditorApplication.delayCall += () => Leave(true);
+            if (playing) EditorGUILayout.HelpBox("Exit Play mode to open or delete the test scene.", MessageType.Info);
+        }
+
+        void TestSceneGUI(bool playing)
+        {
+            // Tools that rebuild the avatar in Play mode can drop the reference: fall back to the copy
+            if (avatar == null) avatar = Copies(SceneManager.GetActiveScene()).FirstOrDefault();
+            avatar = (GameObject)EditorGUILayout.ObjectField("Avatar", avatar, typeof(GameObject), true);
+            if (avatar != null && avatar.scene.path != ScenePath)
+                EditorGUILayout.HelpBox("Pick an object inside the test scene.", MessageType.Warning);
+
+            if (Lightmapping.isRunning)
+                EditorGUILayout.HelpBox("Baking (progress bar at the bottom right). Stations A, E and F are only lit once it finishes; " +
+                                        "wait for it before entering Play mode.", MessageType.Info);
+            else if (Lightmapping.lightingDataAsset == null)
+            {
+                EditorGUILayout.HelpBox("The scene isn't baked: stations A, E and F are unlit.", MessageType.Warning);
+                using (new EditorGUI.DisabledScope(playing))
+                    if (GUILayout.Button("Bake")) Lightmapping.BakeAsync();
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Station", EditorStyles.boldLabel);
+            for (int i = 0; i < StationNames.Length; i++)
+            {
+                // Clicking the current station again brings the avatar and the view back to it
+                bool current = station == i;
+                if (GUILayout.Toggle(current, StationNames[i], "Button") != current) GoToStation(i);
+            }
+            EditorGUILayout.HelpBox(StationNotes[station], MessageType.None);
+
+            if (!playing)
+                EditorGUILayout.HelpBox("The test is more accurate to VRChat in Play mode: tools such as Modular Avatar and VRCFury are applied " +
+                                        "as they are at upload, and Gesture Manager or Av3 Emulator can run the avatar's toggles.", MessageType.Warning);
+
+            EditorGUILayout.Space();
+            if (string.IsNullOrEmpty(EditorUserSettings.GetConfigValue(ReturnKey)))
+                EditorGUILayout.HelpBox("This scene wasn't opened from this window, so there is no scene to return to: returning opens a new empty scene.", MessageType.Info);
+            using (new EditorGUI.DisabledScope(playing))
+            {
+                if (GUILayout.Button("Return to Main Scene", GUILayout.Height(28)))
+                    EditorApplication.delayCall += () => Leave(false);
+                if (GUILayout.Button("Return and Delete Test Scene", GUILayout.Height(28)))
+                    EditorApplication.delayCall += () => Leave(true);
+            }
+            if (playing) EditorGUILayout.HelpBox("Exit Play mode to return or bake.", MessageType.Info);
+        }
+
+        void Enter()
+        {
+            if (avatar == null || InTestScene) return;
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            if (Enumerable.Range(0, SceneManager.sceneCount).Any(i => string.IsNullOrEmpty(SceneManager.GetSceneAt(i).path)))
+            {
+                EditorUtility.DisplayDialog(Title, "Save your scene to a file first (File > Save As).\n\n" +
+                                                   "The test scene takes the place of the open scene, and only a saved scene can be reopened afterwards.", "OK");
+                return;
+            }
+
+            avatar = EnterTestScene(avatar);
+            GoToStation(station);
+            // A test scene kept from last time is already baked
+            if (Lightmapping.lightingDataAsset == null) Lightmapping.BakeAsync();
+        }
+
+        void GoToStation(int i)
+        {
+            station = i;
+            if (avatar != null) MoveToStation(new[] { avatar.transform }, i);
+            FrameStation(i);
+        }
+
+        // Goes back to the main scene when the test scene is open, then deletes the test scene if asked to
+        void Leave(bool delete)
+        {
+            if (delete && !EditorUtility.DisplayDialog(Title, "Delete the test scene and its baked lighting?\n\n" +
+                                                              "It is built and baked again the next time you create it.", "Delete", "Cancel"))
+                return;
+            if (InTestScene) avatar = ReturnToMainScene();
+            if (delete) DeleteTestScene();
+        }
+
+        static void FrameStation(int i)
+        {
+            var sv = SceneView.lastActiveSceneView;
+            if (sv == null) return;
+            // Look at head height from the front (+Z side), like facing the avatar
+            sv.LookAt(StationPos(i) + Vector3.up * 1.4f, Quaternion.Euler(5f, 180f, 0f), 2.5f);
+            sv.sceneLighting = true;
+        }
+
+        // ---------------------------------------------------------------- Switching scenes
+
+        // What ReturnToMainScene puts back: the scenes that were open, the Scene view camera and the original avatar
+        [Serializable]
+        class ReturnState
+        {
+            public List<SceneEntry> Scenes = new List<SceneEntry>();
+            public string Avatar; // GlobalObjectId: the object reference itself is lost when its scene closes
+            public bool HasView, Ortho;
+            public Vector3 Pivot;
+            public Quaternion Rotation;
+            public float Size;
+        }
+
+        [Serializable]
+        struct SceneEntry
+        {
+            public string Path;
+            public bool Loaded, Active;
+        }
+
+        static IEnumerable<GameObject> Copies(Scene scene) => scene.GetRootGameObjects().Where(g => g.name.EndsWith(CopySuffix));
+
+        // Opens the test scene (building it first if there is none) with a copy of the avatar in it, closes the other scenes
+        // without saving them and remembers them for ReturnToMainScene. No dialogs, no bake. Every open scene must be saved to a file.
+        internal static GameObject EnterTestScene(GameObject avatar)
+        {
+            var active = SceneManager.GetActiveScene();
+            var open = Enumerable.Range(0, SceneManager.sceneCount).Select(SceneManager.GetSceneAt).Where(s => s.path != ScenePath).ToArray();
+
+            var state = new ReturnState { Avatar = GlobalObjectId.GetGlobalObjectIdSlow(avatar).ToString() };
+            foreach (var s in open) state.Scenes.Add(new SceneEntry { Path = s.path, Loaded = s.isLoaded, Active = s == active });
+            var sv = SceneView.lastActiveSceneView;
+            if (sv != null)
+            {
+                state.HasView = true;
+                state.Pivot = sv.pivot;
+                state.Rotation = sv.rotation;
+                state.Size = sv.size;
+                state.Ortho = sv.orthographic;
+            }
+            EditorUserSettings.SetConfigValue(ReturnKey, JsonUtility.ToJson(state));
+
+            // Opened beside the avatar's scene, so the avatar can be copied across before that scene closes
+            var scene = File.Exists(ScenePath) ? EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive) : BuildScene();
+            SceneManager.SetActiveScene(scene);
+            // A copy from last time is only still here if the test scene was saved by hand
+            foreach (var old in Copies(scene).ToArray()) DestroyImmediate(old);
+
+            // The copy keeps its scripts, so build tools and emulators treat it as the avatar in Play mode
+            var copy = Instantiate(avatar);
+            SceneManager.MoveGameObjectToScene(copy, scene);
+            copy.name = avatar.name + CopySuffix;
+            copy.transform.localScale = avatar.transform.lossyScale;
+            copy.SetActive(true);
+
+            foreach (var s in open) EditorSceneManager.CloseScene(s, true);
+            return copy;
+        }
+
+        // Saves the test scene without the avatar copy (keeping its bake) and reopens the scenes that were open before.
+        // Returns the original avatar, or null when it can't be found. No dialogs.
+        internal static GameObject ReturnToMainScene()
+        {
+            var test = SceneManager.GetSceneByPath(ScenePath);
+            if (test.isLoaded)
+            {
+                if (Lightmapping.isRunning) Lightmapping.Cancel();
+                foreach (var copy in Copies(test).ToArray()) DestroyImmediate(copy);
+                EditorSceneManager.SaveScene(test);
+            }
+
+            var state = JsonUtility.FromJson<ReturnState>(EditorUserSettings.GetConfigValue(ReturnKey) ?? "") ?? new ReturnState();
+            EditorUserSettings.SetConfigValue(ReturnKey, "");
+
+            var scenes = state.Scenes.Where(s => File.Exists(s.Path)).ToList();
+            if (scenes.Count == 0)
+                EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            else
+            {
+                // Unity wants exactly one active scene and it has to be loaded (the old one may have been deleted meanwhile)
+                int active = scenes.FindIndex(s => s.Active);
+                if (active < 0) active = Mathf.Max(0, scenes.FindIndex(s => s.Loaded));
+                EditorSceneManager.RestoreSceneManagerSetup(scenes
+                    .Select((s, i) => new SceneSetup { path = s.Path, isLoaded = s.Loaded || i == active, isActive = i == active }).ToArray());
+            }
+
+            var sv = SceneView.lastActiveSceneView;
+            if (state.HasView && sv != null) sv.LookAt(state.Pivot, state.Rotation, state.Size, state.Ortho, true);
+
+            return GlobalObjectId.TryParse(state.Avatar ?? "", out var id) ? GlobalObjectId.GlobalObjectIdentifierToObjectSlow(id) as GameObject : null;
+        }
+
+        // Deletes everything the tool generated: the scene, its materials, lighting settings and bake. The test scene must not be open.
+        internal static void DeleteTestScene()
+        {
+            AssetDatabase.DeleteAsset(Folder);
+            if (Directory.Exists(ParentFolder) && !Directory.EnumerateFileSystemEntries(ParentFolder).Any())
+                AssetDatabase.DeleteAsset(ParentFolder);
+        }
+
+        // ---------------------------------------------------------------- Build
+
+        // Creates the scene beside the open ones, makes it the active scene and saves it with its materials and lighting settings.
+        // No dialogs, no bake. Every open scene must be saved to a file (Unity can't add a scene next to an untitled one).
+        internal static Scene BuildScene()
         {
             if (!AssetDatabase.IsValidFolder(ParentFolder)) AssetDatabase.CreateFolder("Assets", "HaTools");
             if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder(ParentFolder, "LightingTestScene");
 
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            // Environment and lighting settings belong to the active scene, and new objects are created in it
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            SceneManager.SetActiveScene(scene);
 
             // Dark world environment: no skybox, dim flat ambient
             RenderSettings.skybox = null;
@@ -119,7 +346,7 @@ namespace HaTools
                 sphere.transform.localPosition = new Vector3(-1.3f, 1.4f, 0f);
                 sphere.transform.localScale = Vector3.one * 0.4f;
                 sphere.GetComponent<Renderer>().sharedMaterial = refMat;
-                Object.DestroyImmediate(sphere.GetComponent<Collider>());
+                DestroyImmediate(sphere.GetComponent<Collider>());
 
                 AddLabel(st, StationNames[i]);
                 AddProbes(st);
@@ -163,40 +390,12 @@ namespace HaTools
             Lightmapping.lightingSettings = ls;
 
             EditorSceneManager.SaveScene(scene, ScenePath);
+            return scene;
         }
 
-        // ---------------------------------------------------------------- Move avatar between stations
+        // ---------------------------------------------------------------- Stations
 
-        [MenuItem(MenuMoveA, priority = 20)] static void MoveA() => MoveTo(0);
-        [MenuItem(MenuMoveB, priority = 21)] static void MoveB() => MoveTo(1);
-        [MenuItem(MenuMoveC, priority = 22)] static void MoveC() => MoveTo(2);
-        [MenuItem(MenuMoveD, priority = 23)] static void MoveD() => MoveTo(3);
-        [MenuItem(MenuMoveE, priority = 24)] static void MoveE() => MoveTo(4);
-        [MenuItem(MenuMoveF, priority = 25)] static void MoveF() => MoveTo(5);
-
-        [MenuItem(MenuMoveA, true)]
-        [MenuItem(MenuMoveB, true)]
-        [MenuItem(MenuMoveC, true)]
-        [MenuItem(MenuMoveD, true)]
-        [MenuItem(MenuMoveE, true)]
-        [MenuItem(MenuMoveF, true)]
-        static bool HasSelection() => Selection.activeTransform != null;
-
-        static void MoveTo(int i)
-        {
-            if (MoveToStation(Selection.transforms, i) == 0)
-            {
-                EditorUtility.DisplayDialog("Lighting Test Scene",
-                    "Select an object inside the lighting test scene.\n\n" +
-                    "Build it with Tools > HaTools > Lighting Test Scene > Build Scene and Bake, " +
-                    "then drag your avatar into it.", "OK");
-                return;
-            }
-            FrameStation(i);
-        }
-
-        // Moves the objects that are inside the test scene (never the avatar in the user's own scene).
-        // Returns how many were moved.
+        // Moves the objects that are inside the test scene to a station, facing +Z, with Undo. Returns how many were moved.
         internal static int MoveToStation(IEnumerable<Transform> objects, int i)
         {
             var targets = objects.Where(t => t.gameObject.scene.path == ScenePath).ToArray();
@@ -209,81 +408,6 @@ namespace HaTools
                 t.rotation = Quaternion.identity;
             }
             return targets.Length;
-        }
-
-        static void FrameStation(int i)
-        {
-            var sv = SceneView.lastActiveSceneView;
-            if (sv == null) return;
-            // Look at head height from the front (+Z side), like facing the avatar
-            sv.LookAt(StationPos(i) + Vector3.up * 1.4f, Quaternion.Euler(5f, 180f, 0f), 2.5f);
-            sv.sceneLighting = true;
-        }
-
-        // ---------------------------------------------------------------- Avatar check
-
-        [MenuItem(Menu + "Check Selected Avatar Renderers", priority = 40)]
-        static void CheckAvatar()
-        {
-            var go = Selection.activeGameObject;
-            if (go == null)
-            {
-                EditorUtility.DisplayDialog("Check Avatar", "Select your avatar's root object first.", "OK");
-                return;
-            }
-
-            var report = AnalyseRenderers(go);
-            if (report.Renderers == 0)
-            {
-                EditorUtility.DisplayDialog("Check Avatar: " + go.name, "No mesh renderers found under this object.", "OK");
-                return;
-            }
-
-            Debug.Log("[Lighting Test] Renderer report for " + go.name + "\n" + report.Details);
-
-            var summary = new StringBuilder();
-            summary.AppendLine(report.SamplePoints > 1
-                ? $"[!] Renderers sample lighting from {report.SamplePoints} different points ({report.Unanchored} without an Anchor Override). Parts of the avatar can look mismatched. Set every renderer's Anchor Override to the same bone (e.g. Chest or Hips)."
-                : "OK: all renderers sample lighting from the same point.");
-            summary.AppendLine(report.ProbeWarnings > 0
-                ? $"[!] {report.ProbeWarnings} renderer(s) do not use 'Blend Probes' and will ignore light probes."
-                : "OK: all renderers use Blend Probes.");
-            summary.AppendLine("\nFull per-renderer list is in the Console.");
-            EditorUtility.DisplayDialog("Check Avatar: " + go.name, summary.ToString(), "OK");
-        }
-
-        internal class RendererReport
-        {
-            public int Renderers, SamplePoints, Unanchored, ProbeWarnings;
-            public string Details;
-        }
-
-        internal static RendererReport AnalyseRenderers(GameObject go)
-        {
-            var renderers = go.GetComponentsInChildren<Renderer>(true)
-                .Where(r => !(r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer))
-                .ToArray();
-
-            // Renderers without an Anchor Override each sample from their own bounds centre,
-            // so every one of them counts as a separate sample point
-            var anchors = new HashSet<Transform>();
-            var report = new RendererReport { Renderers = renderers.Length };
-            var sb = new StringBuilder();
-
-            foreach (var r in renderers)
-            {
-                if (r.probeAnchor != null) anchors.Add(r.probeAnchor);
-                else report.Unanchored++;
-                string shaders = string.Join(", ", r.sharedMaterials.Where(m => m != null).Select(m => m.shader.name).Distinct());
-                string anchor = r.probeAnchor != null ? r.probeAnchor.name : "NONE (uses its own bounds centre)";
-                bool badProbes = r.lightProbeUsage != LightProbeUsage.BlendProbes;
-                if (badProbes) report.ProbeWarnings++;
-                sb.AppendLine($"{(badProbes ? "[!] " : "")}{r.name}: probes={r.lightProbeUsage}, anchor={anchor}, shaders={shaders}");
-            }
-
-            report.SamplePoints = anchors.Count + report.Unanchored;
-            report.Details = sb.ToString();
-            return report;
         }
 
         // ---------------------------------------------------------------- Helpers
@@ -318,7 +442,7 @@ namespace HaTools
             bulb.name = "Bulb (visual only)";
             bulb.transform.SetParent(go.transform, false);
             bulb.transform.localScale = Vector3.one * 0.15f;
-            Object.DestroyImmediate(bulb.GetComponent<Collider>());
+            DestroyImmediate(bulb.GetComponent<Collider>());
             var br = bulb.GetComponent<Renderer>();
             br.sharedMaterial = bulbMat;
             br.shadowCastingMode = ShadowCastingMode.Off;

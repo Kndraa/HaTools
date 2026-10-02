@@ -1,5 +1,6 @@
 // Lighting Test Scene tests. Full docs: CLAUDE.md > Tools > Lighting Test Scene.
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -9,23 +10,47 @@ using UnityEngine.SceneManagement;
 
 namespace HaTools.Tests
 {
+    // The saved "main" scenes the tool leaves and returns to, and the cleanup shared by the test classes below
+    static class LightingTestMainScene
+    {
+        internal const string Path = "Assets/HaToolsTestMain.unity";
+        internal const string SecondPath = "Assets/HaToolsTestSecond.unity";
+        internal const string ThirdPath = "Assets/HaToolsTestThird.unity";
+
+        // The tool only works from scenes that are saved to a file. Returns the avatar in the new main scene.
+        internal static GameObject Open()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var avatar = new GameObject("Avatar");
+            GameObject.CreatePrimitive(PrimitiveType.Cube).transform.SetParent(avatar.transform, false);
+            EditorSceneManager.SaveScene(scene, Path);
+            return avatar;
+        }
+
+        internal static void RemoveGenerated()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            LightingTestScene.DeleteTestScene();
+            AssetDatabase.DeleteAsset(Path);
+            AssetDatabase.DeleteAsset(SecondPath);
+            AssetDatabase.DeleteAsset(ThirdPath);
+            EditorUserSettings.SetConfigValue(LightingTestScene.ReturnKey, "");
+        }
+    }
+
     public class LightingTestSceneTests
     {
         readonly List<GameObject> created = new List<GameObject>();
 
         [OneTimeSetUp]
-        public void BuildOnce() => LightingTestScene.BuildScene();
+        public void BuildOnce()
+        {
+            LightingTestMainScene.Open();
+            LightingTestScene.BuildScene();
+        }
 
         [OneTimeTearDown]
-        public void RemoveGeneratedAssets() => RemoveGenerated();
-
-        internal static void RemoveGenerated()
-        {
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            AssetDatabase.DeleteAsset(LightingTestScene.Folder);
-            if (AssetDatabase.FindAssets("", new[] { LightingTestScene.ParentFolder }).Length == 0)
-                AssetDatabase.DeleteAsset(LightingTestScene.ParentFolder);
-        }
+        public void RemoveGeneratedAssets() => LightingTestMainScene.RemoveGenerated();
 
         [TearDown]
         public void DestroyCreatedObjects()
@@ -48,7 +73,9 @@ namespace HaTools.Tests
         [Test]
         public void SavesSceneAndLightingSettings()
         {
+            // Built beside the main scene and made the active one
             Assert.AreEqual(LightingTestScene.ScenePath, SceneManager.GetActiveScene().path);
+            Assert.IsTrue(SceneManager.GetSceneByPath(LightingTestMainScene.Path).isLoaded);
             Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<SceneAsset>(LightingTestScene.ScenePath));
             Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<LightingSettings>(LightingTestScene.SettingsPath));
         }
@@ -100,7 +127,7 @@ namespace HaTools.Tests
             Assert.IsFalse(sun.activeSelf);
         }
 
-        // ---------------------------------------------------------------- Move
+        // ---------------------------------------------------------------- Stations
 
         [Test]
         public void MoveToStationMovesObjectsInTestSceneWithUndo()
@@ -123,82 +150,175 @@ namespace HaTools.Tests
         [Test]
         public void MoveToStationIgnoresObjectsInOtherScenes()
         {
-            var otherScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
-            try
-            {
-                var avatar = Create("Avatar in user's scene");
-                SceneManager.MoveGameObjectToScene(avatar, otherScene);
-                var start = new Vector3(5f, 0f, 5f);
-                avatar.transform.position = start;
+            var avatar = Create("Avatar in user's scene");
+            SceneManager.MoveGameObjectToScene(avatar, SceneManager.GetSceneByPath(LightingTestMainScene.Path));
+            var start = new Vector3(5f, 0f, 5f);
+            avatar.transform.position = start;
 
-                Assert.AreEqual(0, LightingTestScene.MoveToStation(new[] { avatar.transform }, 1));
-                Assert.AreEqual(start, avatar.transform.position);
-            }
-            finally
-            {
-                EditorSceneManager.CloseScene(otherScene, true);
-            }
+            Assert.AreEqual(0, LightingTestScene.MoveToStation(new[] { avatar.transform }, 1));
+            Assert.AreEqual(start, avatar.transform.position);
         }
+    }
 
-        // ---------------------------------------------------------------- Renderer check
+    // Going from the main scene to the test scene and back
+    public class LightingTestSceneSwitchTests
+    {
+        GameObject avatar;
 
-        GameObject AvatarWithCubes(int count)
+        [SetUp]
+        public void OpenMainScene() => avatar = LightingTestMainScene.Open();
+
+        [TearDown]
+        public void RemoveGeneratedAssets() => LightingTestMainScene.RemoveGenerated();
+
+        static int CopiesIn(Scene scene) => scene.GetRootGameObjects().Count(g => g.name.EndsWith(LightingTestScene.CopySuffix));
+
+        [Test]
+        public void EnterOpensTheTestSceneWithACopyAndClosesTheMainScene()
         {
-            var root = Create("Test Avatar");
-            for (int i = 0; i < count; i++)
-                GameObject.CreatePrimitive(PrimitiveType.Cube).transform.SetParent(root.transform, false);
-            return root;
+            var copy = LightingTestScene.EnterTestScene(avatar);
+
+            Assert.AreEqual(1, SceneManager.sceneCount);
+            Assert.AreEqual(LightingTestScene.ScenePath, SceneManager.GetActiveScene().path);
+            Assert.IsNotNull(GameObject.Find(LightingTestScene.StationsRootName));
+
+            Assert.AreEqual(SceneManager.GetActiveScene(), copy.scene);
+            Assert.AreEqual("Avatar" + LightingTestScene.CopySuffix, copy.name);
+            Assert.IsNotNull(copy.GetComponentInChildren<MeshRenderer>());
         }
 
         [Test]
-        public void RendererCheckCountsRenderersWithoutAnchorSeparately()
+        public void CopyIsShownAtItsWorldSizeEvenIfTheAvatarWasHiddenUnderAScaledParent()
         {
-            var report = LightingTestScene.AnalyseRenderers(AvatarWithCubes(2));
-            Assert.AreEqual(2, report.Renderers);
-            Assert.AreEqual(2, report.Unanchored);
-            Assert.AreEqual(2, report.SamplePoints);
+            var parent = new GameObject("Scaled parent");
+            parent.transform.localScale = Vector3.one * 2f;
+            avatar.transform.SetParent(parent.transform, false);
+            avatar.SetActive(false);
+
+            var copy = LightingTestScene.EnterTestScene(avatar);
+
+            Assert.IsNull(copy.transform.parent);
+            Assert.IsTrue(copy.activeInHierarchy);
+            Assert.AreEqual(2f, copy.transform.lossyScale.x, 1e-4f);
         }
 
         [Test]
-        public void RendererCheckTreatsSharedAnchorAsOnePoint()
+        public void ReturnReopensEveryMainSceneAndFindsTheAvatar()
         {
-            var root = AvatarWithCubes(3);
-            foreach (var r in root.GetComponentsInChildren<Renderer>()) r.probeAnchor = root.transform;
+            // The avatar's scene, a second scene that is the active one, and a third that is listed but not loaded
+            var second = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            EditorSceneManager.SaveScene(second, LightingTestMainScene.SecondPath);
+            var third = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            EditorSceneManager.SaveScene(third, LightingTestMainScene.ThirdPath);
+            EditorSceneManager.CloseScene(third, false);
+            SceneManager.SetActiveScene(second);
 
-            var report = LightingTestScene.AnalyseRenderers(root);
-            Assert.AreEqual(0, report.Unanchored);
-            Assert.AreEqual(1, report.SamplePoints);
+            LightingTestScene.EnterTestScene(avatar);
+            var original = LightingTestScene.ReturnToMainScene();
+
+            Assert.AreEqual(3, SceneManager.sceneCount);
+            Assert.AreEqual(LightingTestMainScene.SecondPath, SceneManager.GetActiveScene().path);
+            Assert.IsTrue(SceneManager.GetSceneByPath(LightingTestMainScene.Path).isLoaded);
+            Assert.IsFalse(SceneManager.GetSceneByPath(LightingTestMainScene.ThirdPath).isLoaded);
+
+            Assert.IsNotNull(original);
+            Assert.AreEqual("Avatar", original.name);
+            Assert.AreEqual(LightingTestMainScene.Path, original.scene.path);
+
+            // The test scene is kept for next time
+            Assert.IsTrue(File.Exists(LightingTestScene.ScenePath));
         }
 
         [Test]
-        public void RendererCheckCountsSharedAnchorAndUnanchoredRenderers()
+        public void ReturnSavesTheTestSceneWithoutTheCopy()
         {
-            var root = AvatarWithCubes(3);
-            var renderers = root.GetComponentsInChildren<Renderer>();
-            renderers[0].probeAnchor = root.transform;
-            renderers[1].probeAnchor = root.transform;
+            LightingTestScene.EnterTestScene(avatar);
+            LightingTestScene.ReturnToMainScene();
 
-            var report = LightingTestScene.AnalyseRenderers(root);
-            Assert.AreEqual(1, report.Unanchored);
-            Assert.AreEqual(2, report.SamplePoints);
+            var test = EditorSceneManager.OpenScene(LightingTestScene.ScenePath, OpenSceneMode.Additive);
+            Assert.AreEqual(0, CopiesIn(test));
+            Assert.IsNotNull(test.GetRootGameObjects().SingleOrDefault(g => g.name == LightingTestScene.StationsRootName));
         }
 
         [Test]
-        public void RendererCheckFlagsRenderersIgnoringProbes()
+        public void EnterReplacesACopySavedInTheTestScene()
         {
-            var root = AvatarWithCubes(2);
-            root.GetComponentsInChildren<Renderer>()[0].lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            LightingTestScene.EnterTestScene(avatar);
+            // Saving by hand (Ctrl+S) keeps the copy in the scene file, and opening another scene by hand skips the return
+            EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
+            EditorSceneManager.OpenScene(LightingTestMainScene.Path);
 
-            Assert.AreEqual(1, LightingTestScene.AnalyseRenderers(root).ProbeWarnings);
+            LightingTestScene.EnterTestScene(GameObject.Find("Avatar"));
+            Assert.AreEqual(1, CopiesIn(SceneManager.GetActiveScene()));
         }
 
         [Test]
-        public void RendererCheckIgnoresParticleRenderers()
+        public void ReturnCancelsABakeThatIsStillRunning()
         {
-            var root = Create("Particles only");
-            new GameObject("Particles", typeof(ParticleSystem)).transform.SetParent(root.transform, false);
+            LightingTestScene.EnterTestScene(avatar);
+            Lightmapping.lightingSettings.lightmapper = LightingSettings.Lightmapper.ProgressiveCPU; // CI has no GPU
+            Assert.IsTrue(Lightmapping.BakeAsync(), "Bake didn't start");
 
-            Assert.AreEqual(0, LightingTestScene.AnalyseRenderers(root).Renderers);
+            var original = LightingTestScene.ReturnToMainScene();
+            Assert.IsFalse(Lightmapping.isRunning);
+            Assert.AreEqual(LightingTestMainScene.Path, SceneManager.GetActiveScene().path);
+
+            // The window bakes when it opens a test scene that has no bake
+            LightingTestScene.EnterTestScene(original);
+            Assert.IsNull(Lightmapping.lightingDataAsset);
+        }
+
+        [Test]
+        public void ReturnSkipsScenesThatWereDeletedMeanwhile()
+        {
+            var second = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            EditorSceneManager.SaveScene(second, LightingTestMainScene.SecondPath);
+
+            SceneManager.SetActiveScene(avatar.scene);
+
+            LightingTestScene.EnterTestScene(avatar);
+            AssetDatabase.DeleteAsset(LightingTestMainScene.Path);
+
+            // The active scene is gone, so the remaining one becomes active
+            Assert.IsNull(LightingTestScene.ReturnToMainScene(), "the avatar was in the deleted scene");
+            Assert.AreEqual(1, SceneManager.sceneCount);
+            Assert.AreEqual(LightingTestMainScene.SecondPath, SceneManager.GetActiveScene().path);
+        }
+
+        [Test]
+        public void ReturnWithoutARememberedSceneOpensANewOne()
+        {
+            LightingTestScene.EnterTestScene(avatar);
+            EditorUserSettings.SetConfigValue(LightingTestScene.ReturnKey, "");
+
+            Assert.IsNull(LightingTestScene.ReturnToMainScene());
+            Assert.AreEqual(1, SceneManager.sceneCount);
+            Assert.IsTrue(string.IsNullOrEmpty(SceneManager.GetActiveScene().path));
+        }
+
+        [Test]
+        public void DeleteRemovesEverythingTheToolGenerated()
+        {
+            LightingTestScene.EnterTestScene(avatar);
+            LightingTestScene.ReturnToMainScene();
+            LightingTestScene.DeleteTestScene();
+
+            Assert.IsFalse(AssetDatabase.IsValidFolder(LightingTestScene.Folder));
+            Assert.IsFalse(AssetDatabase.IsValidFolder(LightingTestScene.ParentFolder));
+        }
+
+        [Test]
+        public void DeleteKeepsTheParentFolderWhenItHoldsSomethingElse()
+        {
+            LightingTestScene.EnterTestScene(avatar);
+            LightingTestScene.ReturnToMainScene();
+            AssetDatabase.CreateFolder(LightingTestScene.ParentFolder, "OtherTool");
+
+            LightingTestScene.DeleteTestScene();
+
+            Assert.IsFalse(AssetDatabase.IsValidFolder(LightingTestScene.Folder));
+            Assert.IsTrue(AssetDatabase.IsValidFolder(LightingTestScene.ParentFolder + "/OtherTool"));
+            AssetDatabase.DeleteAsset(LightingTestScene.ParentFolder);
         }
     }
 
@@ -208,14 +328,14 @@ namespace HaTools.Tests
         [OneTimeSetUp]
         public void BuildAndBake()
         {
-            LightingTestScene.BuildScene();
+            LightingTestScene.EnterTestScene(LightingTestMainScene.Open());
             // CI machines have no GPU; the CPU lightmapper also gives the same result on every machine
             Lightmapping.lightingSettings.lightmapper = LightingSettings.Lightmapper.ProgressiveCPU;
             Assert.IsTrue(Lightmapping.Bake(), "Bake failed");
         }
 
         [OneTimeTearDown]
-        public void RemoveGeneratedAssets() => LightingTestSceneTests.RemoveGenerated();
+        public void RemoveGeneratedAssets() => LightingTestMainScene.RemoveGenerated();
 
         // Baked light reaching a surface at avatar chest height, facing the given direction
         static Color Irradiance(int station, Vector3 normal)
@@ -265,6 +385,18 @@ namespace HaTools.Tests
             var right = Irradiance(5, Vector3.right);
             Assert.Greater(left.r, left.b, $"F: side facing -X should be red: {left}");
             Assert.Greater(right.b, right.r, $"F: side facing +X should be blue: {right}");
+        }
+
+        [Test]
+        public void BakeIsKeptWhenSwitchingToTheMainSceneAndBack()
+        {
+            var original = LightingTestScene.ReturnToMainScene();
+            Assert.AreEqual(LightingTestMainScene.Path, SceneManager.GetActiveScene().path);
+
+            // Leaves the test scene open and baked again for the other tests
+            LightingTestScene.EnterTestScene(original);
+            Assert.IsNotNull(Lightmapping.lightingDataAsset, "The test scene lost its bake");
+            Assert.Greater(Front(0).grayscale, Front(3).grayscale * 3f, "A's probes should still hold the baked lamp");
         }
     }
 }
