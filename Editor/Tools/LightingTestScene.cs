@@ -33,6 +33,8 @@ namespace HaTools
             "D - Dark world, ambient only",
             "E - Neutral white baked lamp",
             "F - Red and blue baked lamps (split lighting)",
+            "G - Overbright realtime lamp (pixel light)",
+            "H - Reflection probe, neutral white baked lamp",
         };
 
         // What to look for at each station. lilToon's defaults: CLAUDE.md > Lighting Test Scene > Reading the results.
@@ -45,11 +47,15 @@ namespace HaTools
             "The same as A with a white lamp: the colour reference for A.",
             "Red light from the avatar's left, blue from its right, both baked. A shader that keeps the direction of probe light shows a red side " +
             "and a blue side; one that averages it (lilToon) shows a mix.",
+            "A white pixel light several times brighter than C's. A shader without a limit blows out to white; lilToon caps it at Light Max Limit (1).",
+            "The same as E plus a reflection probe: metallic and glossy materials reflect a pale sky, the floor and the wall. " +
+            "At every other station they reflect black.",
         };
 
         static readonly Color Warm = new Color(1f, 0.7f, 0.35f);
         static readonly Color Red = new Color(1f, 0.15f, 0.1f);
         static readonly Color Blue = new Color(0.15f, 0.3f, 1f);
+        static readonly Color Sky = new Color(0.5f, 0.6f, 0.7f);
 
         internal static Vector3 StationPos(int i) => new Vector3(i * Spacing, 0f, 0f);
 
@@ -110,11 +116,11 @@ namespace HaTools
                 EditorGUILayout.HelpBox("Pick an object inside the test scene.", MessageType.Warning);
 
             if (Lightmapping.isRunning)
-                EditorGUILayout.HelpBox("Baking (progress bar at the bottom right). Stations A, E and F are only lit once it finishes; " +
+                EditorGUILayout.HelpBox("Baking (progress bar at the bottom right). Stations A, E, F and H are only lit once it finishes; " +
                                         "wait for it before entering Play mode.", MessageType.Info);
             else if (Lightmapping.lightingDataAsset == null)
             {
-                EditorGUILayout.HelpBox("The scene isn't baked: stations A, E and F are unlit.", MessageType.Warning);
+                EditorGUILayout.HelpBox("The scene isn't baked: stations A, E, F and H are unlit.", MessageType.Warning);
                 using (new EditorGUI.DisabledScope(playing))
                     if (GUILayout.Button("Bake")) Lightmapping.BakeAsync();
             }
@@ -314,12 +320,12 @@ namespace HaTools
                 st.SetParent(root.transform, false);
                 st.position = StationPos(i);
 
-                // Floor (10 x 10 m) and back wall, both static so they take part in the bake
+                // Floor (10 x 10 m) and back wall, both static so they take part in the bake and show in H's reflection probe
                 var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 floor.name = "Floor";
                 floor.transform.SetParent(st, false);
                 floor.GetComponent<Renderer>().sharedMaterial = floorMat;
-                GameObjectUtility.SetStaticEditorFlags(floor, StaticEditorFlags.ContributeGI);
+                GameObjectUtility.SetStaticEditorFlags(floor, StaticEditorFlags.ContributeGI | StaticEditorFlags.ReflectionProbeStatic);
 
                 var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 wall.name = "Back Wall";
@@ -327,7 +333,7 @@ namespace HaTools
                 wall.transform.localPosition = new Vector3(0f, 2f, -3.5f);
                 wall.transform.localScale = new Vector3(8f, 4f, 0.2f);
                 wall.GetComponent<Renderer>().sharedMaterial = wallMat;
-                GameObjectUtility.SetStaticEditorFlags(wall, StaticEditorFlags.ContributeGI);
+                GameObjectUtility.SetStaticEditorFlags(wall, StaticEditorFlags.ContributeGI | StaticEditorFlags.ReflectionProbeStatic);
 
                 // Dynamic reference sphere: lit the same way an avatar is (probes + realtime lights)
                 var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -352,6 +358,11 @@ namespace HaTools
                     case 5: // avatar's left (-X) red, right (+X) blue: shows whether a shader keeps the light's direction
                         AddLamp(st, "Red Lamp (Baked)", new Vector3(-2f, 1.6f, 1.5f), Red, 2.5f, LightmapBakeType.Baked, LightRenderMode.Auto, redBulb);
                         AddLamp(st, "Blue Lamp (Baked)", new Vector3(2f, 1.6f, 1.5f), Blue, 2.5f, LightmapBakeType.Baked, LightRenderMode.Auto, blueBulb);
+                        break;
+                    case 6: AddLamp(st, "White Lamp (Realtime, Important, overbright)", lampPos, Color.white, 4f, LightmapBakeType.Realtime, LightRenderMode.ForcePixel, whiteBulb); break;
+                    case 7: // E's lamp, so E shows the same light without reflections
+                        AddLamp(st, "White Lamp (Baked)", lampPos, Color.white, 2f, LightmapBakeType.Baked, LightRenderMode.Auto, whiteBulb);
+                        AddReflectionProbe(st);
                         break;
                 }
             }
@@ -444,6 +455,20 @@ namespace HaTools
                     for (float z = -3f; z <= 3.01f; z += 1.5f)
                         positions.Add(new Vector3(x, y, z));
             lpg.probePositions = positions.ToArray();
+        }
+
+        // Baked probe that gives shiny materials something to reflect: a pale sky colour, the floor and the back wall
+        static void AddReflectionProbe(Transform parent)
+        {
+            var go = new GameObject("Reflection Probe (Baked)");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = Vector3.up * 1.2f;
+
+            var probe = go.AddComponent<ReflectionProbe>();
+            probe.mode = ReflectionProbeMode.Baked;
+            probe.size = Vector3.one * 10f; // the station's floor: renderers at other stations don't use it
+            probe.clearFlags = ReflectionProbeClearFlags.SolidColor;
+            probe.backgroundColor = Sky;
         }
 
         static void AddLabel(Transform parent, string text)

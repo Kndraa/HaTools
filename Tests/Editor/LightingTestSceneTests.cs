@@ -6,6 +6,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
 namespace HaTools.Tests
@@ -118,6 +119,22 @@ namespace HaTools.Tests
             var f = Station(5).GetComponentsInChildren<Light>();
             Assert.AreEqual(2, f.Length, "F: two lamps");
             Assert.IsTrue(f.All(l => l.lightmapBakeType == LightmapBakeType.Baked), "F: both baked");
+
+            Assert.AreEqual(LightmapBakeType.Realtime, LampAt(6).lightmapBakeType, "G: realtime lamp");
+            Assert.AreEqual(LightRenderMode.ForcePixel, LampAt(6).renderMode, "G: pixel light");
+            Assert.Greater(LampAt(6).intensity, LampAt(2).intensity, "G: brighter than C");
+            Assert.AreEqual(LightmapBakeType.Baked, LampAt(7).lightmapBakeType, "H: baked lamp");
+        }
+
+        [Test]
+        public void OnlyTheReflectionStationHasAReflectionProbe()
+        {
+            var probe = Object.FindObjectsOfType<ReflectionProbe>().Single();
+            Assert.AreEqual(Station(7), probe.transform.parent);
+            Assert.AreEqual(ReflectionProbeMode.Baked, probe.mode);
+            // An avatar at the next station must not pick it up
+            Assert.IsTrue(probe.bounds.Contains(LightingTestScene.StationPos(7) + Vector3.up));
+            Assert.IsFalse(probe.bounds.Contains(LightingTestScene.StationPos(6) + Vector3.up));
         }
 
         [Test]
@@ -366,16 +383,25 @@ namespace HaTools.Tests
             Assert.Greater(Front(0).grayscale, dark * 3f, "A: baked lamp should be much brighter than D");
             Assert.Greater(Front(4).grayscale, dark * 3f, "E: baked lamp should be much brighter than D");
             Assert.Greater(Front(5).grayscale, dark * 3f, "F: baked lamps should be much brighter than D");
+            Assert.Greater(Front(7).grayscale, dark * 3f, "H: baked lamp should be much brighter than D");
+        }
+
+        [Test]
+        public void ReflectionStationHasABakedReflection()
+        {
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) Assert.Ignore("Baking a reflection probe needs a graphics device");
+            Assert.IsNotNull(Object.FindObjectOfType<ReflectionProbe>().bakedTexture, "H: the reflection probe has no baked cubemap");
         }
 
         [Test]
         public void RealtimeLampsAreNotBakedIntoProbes()
         {
-            // B and C get their lamp at runtime only, so their probes hold the same ambient as D.
+            // B, C and G get their lamp at runtime only, so their probes hold the same ambient as D.
             // This also catches light leaking in from the neighbouring stations.
             float dark = Front(3).grayscale;
             Assert.Less(Front(1).grayscale, dark * 1.5f + 1e-4f, "B");
             Assert.Less(Front(2).grayscale, dark * 1.5f + 1e-4f, "C");
+            Assert.Less(Front(6).grayscale, dark * 1.5f + 1e-4f, "G");
         }
 
         [Test]
