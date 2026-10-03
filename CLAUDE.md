@@ -135,6 +135,31 @@ Semantic versioning in `package.json`. The version is bumped only when releasing
 
 Full documentation for each tool. One `###` section per tool, in alphabetical order.
 
+### Bounds Fixer
+
+- **File:** `Editor/Tools/BoundsFixer.cs`
+- **Tests:** `Tests/Editor/BoundsFixerTests.cs`, on a small humanoid built in code: the overshoot maths (worst side, in metres, root bone scale), every pose's muscle names, the check (tight bounds far from the root bone are too small, a mesh that follows the root bone or has room is fine, the worst pose is named, legs are moved, only the current pose without a humanoid rig, disabled renderers and renderers without a root bone are checked, renderers without a mesh are skipped, the avatar and scene are left alone) and growing (fits every pose with a margin, Undo, never shrinks, fine bounds untouched, stored bounds with Update When Offscreen).
+- **Menu:** Tools > HaTools > Bounds Fixer (opens a window)
+- **Purpose:** find skinned meshes whose bounds are too small, and fix them. A skinned mesh stops being drawn when its bounds box leaves the view, even while the mesh itself is still in view, so parts of the avatar vanish at the edge of the screen. The box is fixed relative to the root bone, and a mesh always fits its box in the pose it was imported in, so nothing looks wrong in the editor: a glove whose box sits around the hands in T-pose leaves that box as soon as the arms come down.
+- **How it works:**
+  1. Pick the avatar in the scene in the *Avatar* field (it starts with the current selection).
+  2. *Check Bounds* copies the avatar into a hidden preview scene, moves the copy through the test poses below with Unity's humanoid muscles (`HumanPoseHandler`), bakes every skinned mesh in each pose and measures the box around its vertices in the root bone's space. The copy sits under a disabled object, so none of its scripts run, and it is thrown away afterwards: the avatar and its scene are not touched.
+  3. The window lists every skinned mesh renderer (including ones on disabled objects), worst first: *OK*, or *Too small* with how far the mesh sticks out of its bounds in metres and the pose where it sticks out the most. Clicking a renderer shows it in the Hierarchy.
+  4. With *Show bounds in the Scene view* on, every renderer's bounds are drawn in the Scene view (Unity only draws the selected one): green when large enough, red when too small, with a yellow box showing what growing would set.
+  5. *Grow N Bounds to Fit* grows each bounds that is too small to cover the mesh in every test pose, plus a margin of 5% of that box's longest side on every side, with Undo. Bounds are only ever grown, and ones that are already large enough are left alone. The list and boxes follow the renderers' bounds as they are now, so growing and Undo show up without a new check.
+- **Test poses:** the current pose (as it is, before anything is moved), arms up, arms down, arms forward, arms back, legs apart, legs forward, legs back, bent forward / bent back / leaning left / leaning right (each with the arms up, to reach as far as possible), turned left, turned right. Each pose overrides a few muscles of the current pose and keeps the rest; muscles go from -1 to 1, the ends of Unity's default range.
+- **Settings / options:** none. `Tolerance` (1 mm that a mesh may stick out) and `Margin` (5%) are constants in the code.
+- **Caveats / known issues:**
+  - Only humanoid muscles are moved. Bones outside the humanoid rig (tail, ears, wings, hair and skirt PhysBones), blend shapes that aren't set right now, and animations that move or scale bones are not tried: the margin is the only room they get. Blend shapes at their current weights are included, so set a large one before checking if it matters.
+  - The poses stop at Unity's default muscle limits. IK and full-body tracking can bend an avatar a little further.
+  - Without a humanoid Animator on the avatar only the current pose is checked, and the window says so.
+  - The measured box belongs to the root bone the renderer had during the check. Check again after changing a root bone (for example with Root Bone and Anchor Fixer) or a mesh.
+  - Bounds that are far too large are not reported or shrunk. VRChat's performance rank counts the size of all bounds together, so growing can raise it; the SDK's build panel shows the result.
+  - With *Update When Offscreen* on, Unity recalculates the bounds every frame and ignores the stored ones. The tool checks and grows the stored bounds (they are what counts once the option is off) and marks the renderer in the list. Not confirmed: whether VRChat turns the option off on avatars.
+  - Mesh renderers (not skinned) aren't checked: their bounds come from the mesh itself.
+  - Tools that set bounds when the avatar is built (for example Modular Avatar's Mesh Settings, or Avatar Optimizer merging meshes) can override these values in the uploaded avatar.
+  - The check takes about 1.5 seconds per million vertices (measured with ten meshes of 100,000 vertices), with no progress bar.
+
 ### Lighting Test Scene
 
 - **File:** `Editor/Tools/LightingTestScene.cs`
@@ -233,6 +258,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-03: Added Bounds Fixer (the "Bounds check" idea). Approach chosen by the owner: test poses on a hidden copy rather than one shared bounds for every renderer (redundant with Root Bone and Anchor Fixer), a reach estimate from bone lengths (covers every pose but asks for a 2.5 to 3 m cube on anything that reaches the hands) or the current pose only (finds nothing on an avatar at rest). The copy lives in a preview scene under a disabled object, so the user's scene isn't modified and no script on the copy runs. Arm muscle values were found by sweeping them on the test humanoid (T-pose is Down-Up 0.4, Front-Back 0.3; straight ahead is 0.2 / -0.6, not Front-Back -1, which crosses the arms). Not tried on a real avatar yet.
 - 2026-10-03: Lighting Test Scene: added stations G (overbright realtime lamp) and H (reflection probe with E's lamp, so E is its control). The probe uses a solid sky colour rather than a skybox: a skybox is scene-wide and would give the dark stations a bright reflection. Not adding: two overlapping pixel lights and realtime shadows (lilToon-specific or off by default), and the contact sheet (dropped by the owner).
 - 2026-10-02: Lighting Test Scene revised into a window: avatar field, one button per station, and buttons to create, open, return from and delete the test scene. The avatar is copied into the test scene instead of being dragged in by hand, and the scenes that were open, the camera and the avatar are restored on return. The test scene is kept between sessions so it isn't baked every time. The renderer check was removed (Root Bone and Anchor Fixer covers light anchors). Considered and dropped: building the stage in the user's own scene (a real bake there replaces that scene's lighting data, and faking the probes means overriding the scene's own lights and environment), and a viewport inside the window (Unity can't bake a window's private scene).
 - 2026-10-02: Unity 2022.3.22f1 is installed on the owner's machine (`D:\Unity\Unity Editor\2022.3.22f1`), so local sessions can run the Edit Mode tests without CI: copy `.github/test-project/` to a temporary folder, add `Assets/` and the package under `Packages/com.kndra.hatools/` (as the workflow does), then `Unity.exe -batchmode -projectPath <copy> -runTests -testPlatform EditMode -testResults <file>`.
@@ -249,5 +275,4 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
 - Idea: Lighting Test Scene station with a lamp behind or below the avatar.
-- Idea: Bounds check. Skinned mesh bounds that are too small make parts of the avatar disappear at the edge of the view. Approach still to be discussed: simply setting one shared bounds and root bone on every renderer was judged a little redundant.
 - Idea: Material comparison tool. Any two materials side by side, with the differences highlighted. Layout to be described later.
