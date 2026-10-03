@@ -24,7 +24,7 @@ namespace HaTools
         [SerializeField] GameObject avatar;
         [SerializeField] List<Entry> entries = new List<Entry>();
         [SerializeField] bool hasResult, humanoid;
-        [SerializeField] bool showGreen = true, showRed = true, showYellow = true;
+        [SerializeField] bool incorrectOpen, correctOpen;
         Vector2 scroll;
 
         void OnEnable()
@@ -78,23 +78,12 @@ namespace HaTools
                 return;
             }
 
-            // A box is drawn in the Scene view when its renderer's checkbox and its colour's checkbox are both on
+            EditorGUILayout.LabelField("Checked bounds are drawn in the Scene view: red when too small, green when large enough. " +
+                                       "Yellow is what growing sets.", EditorStyles.wordWrappedMiniLabel);
             EditorGUI.BeginChangeCheck();
-            showGreen = EditorGUILayout.ToggleLeft("Show green bounds (large enough)", showGreen);
-            showRed = EditorGUILayout.ToggleLeft("Show red bounds (too small)", showRed);
-            showYellow = EditorGUILayout.ToggleLeft("Show yellow bounds (what growing sets)", showYellow);
-
             scroll = EditorGUILayout.BeginScrollView(scroll);
-            foreach (var e in live)
-            {
-                EditorGUILayout.BeginHorizontal();
-                e.Show = GUILayout.Toggle(e.Show, new GUIContent("", "Show this renderer's bounds in the Scene view"), GUILayout.Width(16));
-                // Read-only: clicking the field shows the renderer in the Hierarchy
-                EditorGUILayout.ObjectField(e.Renderer, typeof(SkinnedMeshRenderer), true, GUILayout.Width(170));
-                EditorGUILayout.LabelField((e.TooSmall ? $"Too small: sticks out {e.Overshoot:0.00} m ({e.Pose})" : "OK") +
-                                           (e.Renderer.updateWhenOffscreen ? ". Update When Offscreen is on" : ""), EditorStyles.wordWrappedLabel);
-                EditorGUILayout.EndHorizontal();
-            }
+            incorrectOpen = Group(incorrectOpen, "Incorrect bounds", live.Where(e => e.TooSmall).ToList());
+            correctOpen = Group(correctOpen, "Correct bounds", live.Where(e => !e.TooSmall).ToList());
             EditorGUILayout.EndScrollView();
             if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
 
@@ -107,21 +96,48 @@ namespace HaTools
                 }
         }
 
+        // A foldout listing renderers, each with a checkbox for drawing its bounds in the Scene view. The foldout's own
+        // checkbox is on while any of theirs is on, and clicking it sets them all (Unity has no control that does this by itself).
+        static bool Group(bool open, string title, List<Entry> group)
+        {
+            EditorGUILayout.BeginHorizontal();
+            bool any = group.Any(e => e.Show);
+            if (GUILayout.Toggle(any, GUIContent.none, GUILayout.Width(16)) != any)
+                foreach (var e in group) e.Show = !any;
+            open = EditorGUILayout.Foldout(open, $"{title} ({group.Count})", true);
+            EditorGUILayout.EndHorizontal();
+            if (!open) return false;
+
+            foreach (var e in group)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(32);
+                e.Show = GUILayout.Toggle(e.Show, GUIContent.none, GUILayout.Width(16));
+                // Read-only: clicking the field shows the renderer in the Hierarchy
+                EditorGUILayout.ObjectField(e.Renderer, typeof(SkinnedMeshRenderer), true, GUILayout.Width(170));
+                EditorGUILayout.LabelField((e.TooSmall ? $"Sticks out {e.Overshoot:0.00} m ({e.Pose})" : "") +
+                                           (e.Renderer.updateWhenOffscreen ? "  Update When Offscreen is on" : ""), EditorStyles.wordWrappedLabel);
+                EditorGUILayout.EndHorizontal();
+            }
+            return true;
+        }
+
         // Unity only draws the bounds of the selected renderer: draw every one that is switched on
         void OnSceneGUI(SceneView sv)
         {
             foreach (var e in entries)
             {
-                if (e.Renderer == null || !e.Show) continue;
-                Handles.matrix = Root(e.Renderer).localToWorldMatrix;
+                if (e.Renderer == null) continue;
                 bool tooSmall = e.TooSmall;
-                if (tooSmall ? showRed : showGreen)
+                Handles.matrix = Root(e.Renderer).localToWorldMatrix;
+                if (e.Show)
                 {
                     var bounds = Stored(e.Renderer);
                     Handles.color = tooSmall ? Color.red : Color.green;
                     Handles.DrawWireCube(bounds.center, bounds.size);
                 }
-                if (!tooSmall || !showYellow) continue;
+                // What growing sets is always drawn
+                if (!tooSmall) continue;
                 var grown = e.Grown;
                 Handles.color = Color.yellow;
                 Handles.DrawWireCube(grown.center, grown.size);
