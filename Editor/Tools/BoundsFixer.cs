@@ -129,17 +129,12 @@ namespace HaTools
         {
             foreach (var e in entries)
             {
-                if (e.Renderer == null) continue;
-                bool tooSmall = e.TooSmall;
+                if (e.Renderer == null || !e.Show) continue;
                 Handles.matrix = Root(e.Renderer).localToWorldMatrix;
-                if (e.Show)
-                {
-                    var bounds = Stored(e.Renderer);
-                    Handles.color = tooSmall ? Color.red : Color.green;
-                    Handles.DrawWireCube(bounds.center, bounds.size);
-                }
-                // What growing sets is always drawn
-                if (!tooSmall) continue;
+                var bounds = Stored(e.Renderer);
+                Handles.color = e.TooSmall ? Color.red : Color.green;
+                Handles.DrawWireCube(bounds.center, bounds.size);
+                if (!e.TooSmall) continue;
                 var grown = e.Grown;
                 Handles.color = Color.yellow;
                 Handles.DrawWireCube(grown.center, grown.size);
