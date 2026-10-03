@@ -16,7 +16,7 @@ A lightweight, editor-only Unity package of small scripts that run quickly. They
 
 ## Tools
 
-- **Lighting Test Scene**: a window that takes a copy of your avatar into a baked scene with baked, vertex, pixel, ambient-only, red/blue split, overbright and reflection probe lighting stations, so you can check how its shaders look under VRChat world lighting. Buttons switch stations, and one click brings you back to your own scene; the test scene is kept so it isn't baked again each time.
+- **Lighting Test Scene**: a window that takes a copy of your avatar into a baked scene with baked, vertex, pixel, ambient-only, red/blue split, overbright, reflection probe and backlight lighting stations, so you can check how its shaders look under VRChat world lighting. Buttons switch stations, and one click brings you back to your own scene; the test scene is kept so it isn't baked again each time.
 - **Root Bone and Anchor Fixer**: checks whether all of your avatar's renderers share the same root bone and light anchor (Anchor Override), and sets them all to the ones you pick, with Undo.
 - **Shader Fallback Preview**: shows a temporary copy of your avatar with the shaders VRChat falls back to when someone has your shaders blocked, with the Scene view camera in front of it, and lists what each material falls back to. One click removes it and puts the camera back.
 
