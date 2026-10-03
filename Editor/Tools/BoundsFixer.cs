@@ -24,7 +24,7 @@ namespace HaTools
         [SerializeField] GameObject avatar;
         [SerializeField] List<Entry> entries = new List<Entry>();
         [SerializeField] bool hasResult, humanoid;
-        [SerializeField] bool showBoxes = true;
+        [SerializeField] bool incorrectOpen, correctOpen;
         Vector2 scroll;
 
         void OnEnable()
@@ -78,23 +78,14 @@ namespace HaTools
                 return;
             }
 
+            EditorGUILayout.LabelField("Checked bounds are drawn in the Scene view: red when too small, green when large enough. " +
+                                       "Yellow is what growing sets.", EditorStyles.wordWrappedMiniLabel);
             EditorGUI.BeginChangeCheck();
-            showBoxes = EditorGUILayout.ToggleLeft("Show bounds in the Scene view", showBoxes);
-            if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
-            if (showBoxes)
-                EditorGUILayout.LabelField("Green: large enough. Red: too small. Yellow: what growing sets.", EditorStyles.wordWrappedMiniLabel);
-
             scroll = EditorGUILayout.BeginScrollView(scroll);
-            foreach (var e in live)
-            {
-                EditorGUILayout.BeginHorizontal();
-                // Read-only: clicking the field shows the renderer in the Hierarchy
-                EditorGUILayout.ObjectField(e.Renderer, typeof(SkinnedMeshRenderer), true, GUILayout.Width(170));
-                EditorGUILayout.LabelField((e.TooSmall ? $"Too small: sticks out {e.Overshoot:0.00} m ({e.Pose})" : "OK") +
-                                           (e.Renderer.updateWhenOffscreen ? ". Update When Offscreen is on" : ""), EditorStyles.wordWrappedLabel);
-                EditorGUILayout.EndHorizontal();
-            }
+            incorrectOpen = Group(incorrectOpen, "Incorrect bounds", live.Where(e => e.TooSmall).ToList());
+            correctOpen = Group(correctOpen, "Correct bounds", live.Where(e => !e.TooSmall).ToList());
             EditorGUILayout.EndScrollView();
+            if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
 
             int flagged = live.Count(e => e.TooSmall);
             using (new EditorGUI.DisabledScope(flagged == 0))
@@ -105,13 +96,40 @@ namespace HaTools
                 }
         }
 
-        // Unity only draws the bounds of the selected renderer: draw them all
+        // A foldout listing renderers, each with a checkbox for drawing its bounds in the Scene view. The foldout's own
+        // checkbox is on while any of theirs is on, and clicking it sets them all (Unity has no control that does this by itself).
+        static bool Group(bool open, string title, List<Entry> group)
+        {
+            EditorGUILayout.BeginHorizontal();
+            bool any = group.Any(e => e.Show);
+            // An empty foldout has no checkbox, only the room for one so the titles stay lined up
+            if (group.Count == 0) GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.toggle, GUILayout.Width(16));
+            else if (GUILayout.Toggle(any, GUIContent.none, GUILayout.Width(16)) != any)
+                foreach (var e in group) e.Show = !any;
+            open = EditorGUILayout.Foldout(open, $"{title} ({group.Count})", true);
+            EditorGUILayout.EndHorizontal();
+            if (!open) return false;
+
+            foreach (var e in group)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(32);
+                e.Show = GUILayout.Toggle(e.Show, GUIContent.none, GUILayout.Width(16));
+                // Read-only: clicking the field shows the renderer in the Hierarchy
+                EditorGUILayout.ObjectField(e.Renderer, typeof(SkinnedMeshRenderer), true, GUILayout.Width(170));
+                EditorGUILayout.LabelField((e.TooSmall ? $"Sticks out {e.Overshoot:0.00} m ({e.Pose})" : "") +
+                                           (e.Renderer.updateWhenOffscreen ? "  Update When Offscreen is on" : ""), EditorStyles.wordWrappedLabel);
+                EditorGUILayout.EndHorizontal();
+            }
+            return true;
+        }
+
+        // Unity only draws the bounds of the selected renderer: draw every one that is switched on
         void OnSceneGUI(SceneView sv)
         {
-            if (!showBoxes) return;
             foreach (var e in entries)
             {
-                if (e.Renderer == null) continue;
+                if (e.Renderer == null || !e.Show) continue;
                 Handles.matrix = Root(e.Renderer).localToWorldMatrix;
                 var bounds = Stored(e.Renderer);
                 Handles.color = e.TooSmall ? Color.red : Color.green;
@@ -167,6 +185,7 @@ namespace HaTools
             public SkinnedMeshRenderer Renderer;
             public Bounds Needed; // box around the mesh over every test pose, in the root bone's space
             public string Pose;   // the pose that stuck out the furthest
+            public bool Show;     // draw this renderer's bounds in the Scene view. A check turns it on for the ones that are too small.
 
             // Compared with the renderer's bounds as they are now, so growing and Undo show up without a new check
             public float Overshoot => BoundsFixer.Overshoot(Stored(Renderer), Needed, Root(Renderer).lossyScale);
@@ -256,6 +275,7 @@ namespace HaTools
                 EditorSceneManager.ClosePreviewScene(scene);
                 DestroyImmediate(baked);
             }
+            foreach (var e in entries) e.Show = e.TooSmall;
             return entries;
         }
 

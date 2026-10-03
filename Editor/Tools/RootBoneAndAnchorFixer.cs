@@ -1,7 +1,6 @@
 // Root Bone and Anchor Fixer: checks that every renderer of an avatar shares one root bone and one light anchor, and sets them all to the same ones. Full docs: CLAUDE.md > Tools > Root Bone and Anchor Fixer.
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,7 +17,8 @@ namespace HaTools
 
         [SerializeField] GameObject avatar;
         [SerializeField] Transform rootBone, anchor;
-        [SerializeField] string result;
+        [SerializeField] Report report;
+        [SerializeField] bool hasResult, rootBonesOpen, anchorsOpen;
         Vector2 scroll;
 
         void OnEnable()
@@ -29,21 +29,24 @@ namespace HaTools
 
         void OnGUI()
         {
+            scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUI.BeginChangeCheck();
             avatar = (GameObject)EditorGUILayout.ObjectField("Avatar", avatar, typeof(GameObject), true);
-            if (EditorGUI.EndChangeCheck()) result = null;
+            if (EditorGUI.EndChangeCheck()) hasResult = false;
             bool validAvatar = avatar != null && !EditorUtility.IsPersistent(avatar);
             if (avatar != null && !validAvatar)
                 EditorGUILayout.HelpBox("Pick the avatar in the scene, not a prefab asset.", MessageType.Warning);
 
             using (new EditorGUI.DisabledScope(!validAvatar))
                 if (GUILayout.Button("Check Root Bones and Light Anchors", GUILayout.Height(28)))
-                    result = Check(avatar).Text;
-            if (!string.IsNullOrEmpty(result))
+                {
+                    report = Check(avatar);
+                    hasResult = true;
+                }
+            if (hasResult && validAvatar)
             {
-                scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.MaxHeight(220));
-                EditorGUILayout.HelpBox(result, MessageType.None);
-                EditorGUILayout.EndScrollView();
+                rootBonesOpen = Foldouts(rootBonesOpen, "Root Bones", report.RootBones);
+                anchorsOpen = Foldouts(anchorsOpen, "Light Anchors", report.Anchors);
             }
 
             EditorGUILayout.Space();
@@ -62,17 +65,54 @@ namespace HaTools
                 if (GUILayout.Button("Override All Renderers", GUILayout.Height(28)))
                 {
                     int changed = Apply(avatar, rootBone, anchor);
-                    result = $"Changed {changed} renderer(s).\n\n" + Check(avatar).Text;
+                    ShowNotification(new GUIContent($"Changed {changed} renderer(s)"));
+                    report = Check(avatar);
+                    hasResult = true;
                 }
+            EditorGUILayout.EndScrollView();
+        }
+
+        // A foldout holding one foldout per root bone or anchor in use, each listing the renderers that use it
+        bool Foldouts(bool open, string title, List<Group> groups)
+        {
+            string summary = groups.Count == 0 ? "no renderers" : Shared(groups) ? $"OK, shared by all {groups[0].Renderers.Count}" : "not shared";
+            open = EditorGUILayout.Foldout(open, $"{title}: {summary}", true);
+            if (!open) return false;
+
+            EditorGUI.indentLevel++;
+            foreach (var g in groups)
+            {
+                g.Open = EditorGUILayout.Foldout(g.Open, $"{(g.Value == null ? "None" : Path(g.Value, avatar))} ({g.Renderers.Count})", true);
+                if (!g.Open) continue;
+                EditorGUI.indentLevel++;
+                // Read-only: clicking a field shows the renderer in the Hierarchy
+                foreach (var r in g.Renderers) EditorGUILayout.ObjectField(r, typeof(Renderer), true);
+                EditorGUI.indentLevel--;
+            }
+            EditorGUI.indentLevel--;
+            return true;
         }
 
         // ---------------------------------------------------------------- Check
 
+        [System.Serializable]
+        internal class Group
+        {
+            public Transform Value; // the root bone or anchor; null for the renderers that have none
+            public List<Renderer> Renderers;
+            public bool Open;
+        }
+
+        [System.Serializable]
         internal class Report
         {
-            public bool RootBonesMatch, AnchorsMatch;
-            public string Text;
+            public List<Group> RootBones, Anchors; // one group per value in use, the most used first
+            public bool RootBonesMatch => Shared(RootBones);
+            public bool AnchorsMatch => Shared(Anchors);
         }
+
+        // A missing root bone or anchor means each renderer uses its own transform/bounds, so it never counts as shared
+        static bool Shared(List<Group> groups) => groups.Count == 1 && groups[0].Value != null;
 
         // Mesh and skinned mesh renderers, including ones on disabled objects (toggles)
         internal static Renderer[] Renderers(GameObject avatar) =>
@@ -81,30 +121,16 @@ namespace HaTools
         internal static Report Check(GameObject avatar)
         {
             var renderers = Renderers(avatar);
-            var skinned = renderers.OfType<SkinnedMeshRenderer>().ToArray();
-            var report = new Report();
-            var sb = new StringBuilder();
-
-            // A missing root bone or anchor means each renderer uses its own transform/bounds, so it never counts as shared
-            report.RootBonesMatch = skinned.Length > 0 && skinned.All(r => r.rootBone != null && r.rootBone == skinned[0].rootBone);
-            report.AnchorsMatch = renderers.Length > 0 && renderers.All(r => r.probeAnchor != null && r.probeAnchor == renderers[0].probeAnchor);
-
-            sb.AppendLine(skinned.Length == 0 ? "Root bones: no skinned mesh renderers."
-                : report.RootBonesMatch ? $"OK: all {skinned.Length} skinned mesh renderers use root bone '{Path(skinned[0].rootBone, avatar)}'."
-                : $"[!] Root bones differ across {skinned.Length} skinned mesh renderers:\n" + Groups(skinned, r => ((SkinnedMeshRenderer)r).rootBone, avatar, "none (its own transform)"));
-            sb.AppendLine();
-            sb.Append(renderers.Length == 0 ? "Light anchors: no mesh renderers."
-                : report.AnchorsMatch ? $"OK: all {renderers.Length} renderers use light anchor '{Path(renderers[0].probeAnchor, avatar)}'."
-                : $"[!] Light anchors differ across {renderers.Length} renderers:\n" + Groups(renderers, r => r.probeAnchor, avatar, "none (its own bounds centre)"));
-
-            report.Text = sb.ToString();
-            return report;
+            return new Report
+            {
+                RootBones = Groups(renderers.OfType<SkinnedMeshRenderer>(), r => ((SkinnedMeshRenderer)r).rootBone),
+                Anchors = Groups(renderers, r => r.probeAnchor),
+            };
         }
 
-        // One line per distinct value: "  Hips (3): Body, Hair, Shirt"
-        static string Groups(IEnumerable<Renderer> renderers, System.Func<Renderer, Transform> value, GameObject avatar, string none) =>
-            string.Join("\n", renderers.GroupBy(value).OrderByDescending(g => g.Count())
-                .Select(g => $"  {(g.Key == null ? none : Path(g.Key, avatar))} ({g.Count()}): {string.Join(", ", g.Select(r => r.name))}"));
+        static List<Group> Groups(IEnumerable<Renderer> renderers, System.Func<Renderer, Transform> value) =>
+            renderers.GroupBy(value).OrderByDescending(g => g.Count())
+                .Select(g => new Group { Value = g.Key, Renderers = g.ToList() }).ToList();
 
         static string Path(Transform t, GameObject avatar)
         {

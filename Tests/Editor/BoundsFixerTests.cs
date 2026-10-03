@@ -134,6 +134,7 @@ namespace HaTools.Tests
 
             Assert.AreSame(glove, entry.Renderer);
             Assert.IsTrue(entry.TooSmall);
+            Assert.IsTrue(entry.Show, "Bounds that are too small start shown in the Scene view");
             Assert.AreNotEqual(CurrentPose, entry.Pose);
             Assert.Greater(entry.Overshoot, 0.3f, "A hand moves a lot further than this from where it is in T-pose");
             // The box covers the T-pose cube it started from
@@ -150,6 +151,7 @@ namespace HaTools.Tests
             foreach (var entry in BoundsFixer.Check(avatar))
             {
                 Assert.IsFalse(entry.TooSmall, entry.Renderer.name);
+                Assert.IsFalse(entry.Show, "Bounds that are fine start hidden in the Scene view");
                 Assert.AreEqual(0f, entry.Overshoot, BoundsFixer.Tolerance, entry.Renderer.name);
             }
         }
