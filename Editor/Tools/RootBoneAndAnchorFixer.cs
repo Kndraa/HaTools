@@ -64,7 +64,8 @@ namespace HaTools
             using (new EditorGUI.DisabledScope(!validAvatar || !rootOk || !anchorOk || (rootBone == null && anchor == null)))
                 if (GUILayout.Button("Override All Renderers", GUILayout.Height(28)))
                 {
-                    ShowNotification(new GUIContent($"Changed {Apply(avatar, rootBone, anchor)} renderer(s)"));
+                    int changed = Apply(avatar, rootBone, anchor);
+                    ShowNotification(new GUIContent($"Changed {changed} renderer(s)"));
                     report = Check(avatar);
                     hasResult = true;
                 }
