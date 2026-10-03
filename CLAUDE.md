@@ -64,7 +64,7 @@ Tests/Editor/
 ## Conventions
 
 - **Namespace:** `HaTools`
-- **Class names:** one static class per tool, named after the tool (e.g. `LightingTestScene`).
+- **Class names:** one class per tool, named after the tool (e.g. `LightingTestScene`): an `EditorWindow` when the tool has a window, a static class otherwise.
 - **Menu path:** always build it from the shared constant, never type the root by hand:
   `[MenuItem(HaToolsMenu.Root + "Tool Name")]` or `[MenuItem(HaToolsMenu.Root + "Tool Name/Action")]`.
   Changing `HaToolsMenu.Root` renames the menu for every tool at once.
@@ -138,32 +138,41 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
 ### Lighting Test Scene
 
 - **File:** `Editor/Tools/LightingTestScene.cs`
-- **Tests:** `Tests/Editor/LightingTestSceneTests.cs`. `LightingTestSceneTests`: scene contents, station lights, moving with Undo and scene safety, renderer check. `LightingTestSceneBakeTests`: bakes the scene (CPU lightmapper, since CI has no GPU) and reads each station's light probes to check the stations really differ: baked lamps light A, E and F, realtime lamps B and C stay out of the probes, A is warm and E neutral, F is red on one side and blue on the other. Takes longer than the other tests.
-- **Menu:** Tools > HaTools > Lighting Test Scene > Build Scene and Bake / Move Selection to Station A-F / Check Selected Avatar Renderers
+- **Tests:** `Tests/Editor/LightingTestSceneTests.cs`. `LightingTestSceneTests`: scene contents, station lights, the reflection probe (only at H, not reaching G), moving with Undo and scene safety. `LightingTestSceneSwitchTests`: entering the test scene (the copy, the other scenes closed, rebuilding over assets left by an earlier build), returning (every scene reopened, the original avatar found, the copy not saved, deleted scenes skipped, nothing remembered) and deleting. `LightingTestSceneBakeTests`: bakes the scene (CPU lightmapper, since CI has no GPU) and reads each station's light probes to check the stations really differ: baked lamps light A, E, F and H, realtime lamps B, C and G stay out of the probes, A is warm and E neutral, F is red on one side and blue on the other, H's reflection probe has a baked cubemap (skipped without a graphics device); it also checks the bake is still there after switching to the main scene and back. Takes longer than the other tests.
+- **Menu:** Tools > HaTools > Lighting Test Scene (opens a window)
 - **Purpose:** see how an avatar's shaders (lilToon, Poiyomi, ...) react to the kinds of world lighting found in VRChat, without uploading or launching VRChat.
 - **How it works:**
-  1. *Build Scene and Bake* offers to save the open scene, then creates a new scene at `Assets/HaTools/LightingTestScene/LightingTest.unity` (asks first if one already exists) with six stations 15 m apart on the X axis:
+  1. Pick the avatar in the scene in the window's *Avatar* field (it starts with the current selection). *Create Test Scene and Bake* offers to save the open scenes, builds the test scene at `Assets/HaTools/LightingTestScene/LightingTest.unity`, puts a copy of the avatar in it, closes your own scenes and starts an async bake. The scene has eight stations 15 m apart on the X axis:
      - A: baked warm point lamp. The avatar only receives it through light probes.
      - B: realtime warm lamp, render mode Not Important (vertex light).
      - C: realtime warm lamp, render mode Important (pixel light).
      - D: no lamp, only the dim flat ambient of a dark world.
      - E: baked neutral white lamp, as a colour reference for A.
      - F: baked red lamp on the avatar's left (-X) and blue lamp on its right (+X). The probes then hold light that changes with direction. A shader that shades by direction shows a red side and a blue side; one that flattens probe light into a single colour (lilToon averages it and works out one light direction) shows a mix.
-     Each station has a static floor and back wall, a grid of 125 light probes, a label and a dynamic grey reference sphere that is lit the same way an avatar is. There is no skybox, and an optional realtime sun is included but disabled (turning it on lights every station). The tool writes its materials and a fast, low-resolution `LightingTestSettings.lighting` asset (Progressive GPU) into the same folder, then starts an async bake.
-  2. Drag the avatar into the test scene, select it, and use *Move Selection to Station X*. It moves the selected root objects to that station (facing +Z, with Undo) and frames the Scene view on the avatar's face.
-  3. *Check Selected Avatar Renderers* (works in any scene) lists every renderer's light probe usage, Anchor Override and shaders in the Console, and warns when renderers sample lighting from different points or don't use Blend Probes. Either problem makes parts of an avatar look lit differently in VRChat.
+     - G: realtime white lamp, render mode Important, several times brighter than C's: an overbright world.
+     - H: E's baked white lamp plus a baked reflection probe covering the station (10 m box). The probe holds a pale sky colour, the floor and the back wall, so metallic and glossy materials have something to reflect. E shows the same light without it.
+     Each station has a static floor and back wall, a grid of 125 light probes, a label and a dynamic grey reference sphere that is lit the same way an avatar is. There is no skybox and, outside H, no reflection probe. An optional realtime sun is included but disabled (turning it on lights every station). The tool writes its materials and a fast, low-resolution `LightingTestSettings.lighting` asset (Progressive GPU) into the same folder.
+  2. While the test scene is open the window shows one button per station. A click moves the object in the *Avatar* field (the copy) to that station, facing +Z, with Undo, and frames the Scene view on its face; clicking the current station again brings both back. Under the buttons is a short note on what to look for at that station. Above them is the bake status, with a *Bake* button when the scene has no bake.
+  3. *Return to Main Scene* removes the copy, saves the test scene with its bake, reopens the scenes that were open before (loaded and unloaded ones, same active scene), puts the Scene view camera back and fills the *Avatar* field with the original avatar again.
+  4. Back in your own scene, *Open Test Scene* switches to the kept scene with a fresh copy of the avatar and no new bake, and *Delete Test Scene* deletes `Assets/HaTools/LightingTestScene/` (asks first).
+- **Play mode:** the window says the test is more accurate to VRChat in Play mode. The lighting itself is the same, but the copy keeps its scripts, so build tools (Modular Avatar, VRCFury, ...) process it as they do at upload, and Gesture Manager or Av3 Emulator can run its toggles. The station buttons stay enabled in Play mode; opening, returning, deleting and baking don't (Unity can't switch or save scenes while playing). The scene has no camera, so use the Scene view. Not tried yet with Modular Avatar or VRCFury installed: if a tool replaces the copy with a new object in Play mode, drop that object into the *Avatar* field so the station buttons move it.
 - **Settings / options:** none. Edit the lamp colours, intensities and positions in the code if needed.
 - **Caveats / known issues:**
-  - Rebuilding replaces the scene, its materials and `LightingTestSettings.lighting` in `Assets/HaTools/LightingTestScene/`, and cancels a bake that is still running. The previous bake's `LightingTest/` folder stays until the new bake replaces it; anything else in the folder is left alone.
-  - Moving only works on objects that are inside the test scene, so the avatar in the user's own scene is never moved.
-  - Several selected objects are all moved to the same spot.
+  - The test runs on a copy. Material edits stay (materials are assets); changes to the copy's objects and components are thrown away on return, and anything on the avatar that points at an object elsewhere in your scene is empty on the copy.
+  - Your scenes must be saved to a file, since an untitled scene can't be reopened. Choosing *Don't Save* in Unity's save prompt discards those unsaved changes, because the scenes are closed.
+  - What to return to (scene list, camera, avatar) is kept in the project's user settings (`EditorUserSettings`, key `HaTools.LightingTestScene.Return`), so it survives closing the window. If the test scene is opened by hand there is nothing remembered, and returning opens a new empty scene. If you leave the test scene by hand, *Open Test Scene* and *Delete Test Scene* still work from your own scene.
+  - Returning while the bake is still running cancels it; the next *Open Test Scene* bakes again because the scene has no bake yet.
+  - Saving the test scene by hand (Ctrl+S) saves the copy in it. The next *Open Test Scene* removes old copies (root objects whose name ends in "(Lighting Test Copy)") before adding the new one.
+  - Deleting removes the whole `Assets/HaTools/LightingTestScene/` folder, and `Assets/HaTools/` too if nothing else is in it.
+  - Station buttons only move objects that are inside the test scene.
   - The Progressive GPU lightmapper falls back to CPU (slower) on unsupported GPUs.
   - Earlier versions wrote to `Assets/LightingTestScene/` (standalone draft) or `Assets/Kndra tools/LightingTestScene/` (before the rename to HaTools). Those folders can be deleted.
 - **Reading the results:** some differences between shaders are their default settings, not bugs. lilToon defaults checked against its shader source (Lighting section of the material):
   - B: lilToon ignores vertex lights by default (Vertex Light Strength 0), so it looks like D at station B. Standard and other shaders are lit.
   - D: in a Linear colour space project (as VRChat uses) the ambient colour is about 0.005 in linear terms, below lilToon's Light Min Limit (0.05), so lilToon renders brighter than Standard there. This shows each shader's minimum brightness.
-  - Bright lamps: lilToon caps light at Light Max Limit (1); Standard does not.
-  - Shadows and reflections aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0), and with no skybox or reflection probe every reflection and environment-based effect sees black.
+  - G: lilToon caps light at Light Max Limit (1), so it looks much the same as under a normal lamp; Standard and other shaders without a limit blow out to white.
+  - H: only this station has a reflection probe. At every other station there is no skybox or probe, so reflections and environment-based effects see black: compare a shiny material at E and H. The probe bakes with the lighting, so it is black until the bake finishes.
+  - Shadows aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0).
   - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
 ### Root Bone and Anchor Fixer
@@ -224,6 +233,9 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-03: Lighting Test Scene: added stations G (overbright realtime lamp) and H (reflection probe with E's lamp, so E is its control). The probe uses a solid sky colour rather than a skybox: a skybox is scene-wide and would give the dark stations a bright reflection. Not adding: two overlapping pixel lights and realtime shadows (lilToon-specific or off by default), and the contact sheet (dropped by the owner).
+- 2026-10-02: Lighting Test Scene revised into a window: avatar field, one button per station, and buttons to create, open, return from and delete the test scene. The avatar is copied into the test scene instead of being dragged in by hand, and the scenes that were open, the camera and the avatar are restored on return. The test scene is kept between sessions so it isn't baked every time. The renderer check was removed (Root Bone and Anchor Fixer covers light anchors). Considered and dropped: building the stage in the user's own scene (a real bake there replaces that scene's lighting data, and faking the probes means overriding the scene's own lights and environment), and a viewport inside the window (Unity can't bake a window's private scene).
+- 2026-10-02: Unity 2022.3.22f1 is installed on the owner's machine (`D:\Unity\Unity Editor\2022.3.22f1`), so local sessions can run the Edit Mode tests without CI: copy `.github/test-project/` to a temporary folder, add `Assets/` and the package under `Packages/com.kndra.hatools/` (as the workflow does), then `Unity.exe -batchmode -projectPath <copy> -runTests -testPlatform EditMode -testResults <file>`.
 - 2026-09-28: Added Root Bone and Anchor Fixer (the "Anchor Override fixer" idea, widened to root bones). Built as its own tool, not a button in Lighting Test Scene's renderer check, since that tool is due for a full revision. The override converts skinned mesh bounds to the new root bone so they don't move.
 - 2026-09-28: Versions are bumped only when releasing, not in each tool branch: every branch bumping `package.json` made parallel branches conflict on the same line.
 - 2026-09-28: Added Shader Fallback Preview: a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
@@ -236,7 +248,6 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - 2026-09-27: Added CI (GameCI, Edit Mode tests, missing-.meta check) and Core convention tests. Needs the Unity licence secrets described under Testing.
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
-- Planned: more Lighting Test Scene stations: overbright light, two overlapping pixel lights, a lamp behind or below the avatar, a reflection probe.
+- Idea: Lighting Test Scene station with a lamp behind or below the avatar.
 - Idea: Bounds check. Skinned mesh bounds that are too small make parts of the avatar disappear at the edge of the view. Approach still to be discussed: simply setting one shared bounds and root bone on every renderer was judged a little redundant.
-- Idea: Lighting Test Scene contact sheet. Render every station for each material into one image grid (rows: materials, columns: stations A-F) to compare at a glance. To be discussed.
 - Idea: Material comparison tool. Any two materials side by side, with the differences highlighted. Layout to be described later.
