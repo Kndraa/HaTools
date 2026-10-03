@@ -166,6 +166,28 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - Shadows and reflections aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0), and with no skybox or reflection probe every reflection and environment-based effect sees black.
   - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
+### Material Comparison
+
+- **File:** `Editor/Tools/MaterialComparison.cs`
+- **Tests:** `Tests/Editor/MaterialComparisonTests.cs`: the rows (identical materials, each kind of change being the only difference, keyword order, two different shaders matched by property name, textures without tiling), the filter and search, writing every kind of value with Undo, and the window noticing edits, Undo and a shader change.
+- **Menu:** Tools > HaTools > Material Comparison (opens a window)
+- **Purpose:** see exactly what differs between two materials (for example a body and a face material that should be lit the same way) and bring them in line without flipping between two inspectors.
+- **How it works:**
+  1. Pick two materials in the fields at the top (the window starts with the materials selected in the Project window). Each material has its own column: its preview sphere (drag to rotate), then one row per setting.
+  2. The rows are the material settings (Shader, Render Queue, GPU Instancing, Double Sided GI, Keywords) followed by every property of the first material's shader in shader order, then the properties only the second material's shader has. A texture is followed by a `<name>_ST` row holding its tiling (X, Y) and offset (Z, W), unless the shader marks it `[NoScaleOffset]`. Labels are the shader's property names (`_MainTex`); hover for the name the inspector shows.
+  3. A row whose values differ is highlighted in both columns. Two different shaders are matched by property name; a property one shader lacks shows "not in this shader" and counts as a difference. Values are compared exactly, with no rounding.
+  4. Every value is an editable field (colour, slider or number, texture, vector, toggle, keyword text) and changes the material straight away, with Undo. The highlight updates as you edit, and changes made elsewhere (the material's inspector, Undo) show up within a moment.
+  5. *Only differences* hides the rows that match. The search box filters by property name or inspector name. The count on the right says how many rows differ.
+- **Settings / options:** none besides the filter and search.
+- **Caveats / known issues:**
+  - Editing writes the raw value, the way an animation does. It doesn't do the extra work a shader's own inspector does (turning on the keyword behind a toggle, lilToon's or Poiyomi's rendering mode presets, the Standard shader's blend settings for a Rendering Mode). For those, use the material's inspector and come back here to check the result.
+  - The Shader row is read-only: change the shader in the material's inspector. Typing -1 as Render Queue goes back to the shader's own queue.
+  - With *Only differences* on, a row you edit until it matches stays in the list (without its highlight) until the filter is used again (toggle it or change the search). Removing it mid-edit would move the keyboard focus to the row that takes its place.
+  - Scrolling the list takes the keyboard focus off the field being edited, for the same reason. Only the rows in view are drawn, so shaders with a very long property list (Poiyomi) stay responsive; that hasn't been tried with Poiyomi or lilToon yet, only with Unity's built-in shaders.
+  - Built-in materials and materials inside a model file are shown with their fields disabled: they can't be changed.
+  - Not compared: override tags (`RenderType`, `VRCFallback`), and values saved in the material for properties its current shader doesn't have.
+  - Poiyomi lists its section headers as properties too, so with it *Only differences* is the practical view.
+
 ### Root Bone and Anchor Fixer
 
 - **File:** `Editor/Tools/RootBoneAndAnchorFixer.cs`
@@ -224,6 +246,8 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-03: Added Material Comparison (the "Material comparison tool" idea). Layout chosen by Kndra: two inspector-like columns with editable fields, differing rows highlighted, and the two preview spheres on top. Fields write raw values through the `Material` API rather than `MaterialEditor.ShaderProperty`: custom drawers (Thry, lilToon) have varying heights and expect their own inspector, and fixed-height rows are what lets the window draw only the rows in view. Rows are rebuilt only when a material, its shader or its dirty count changes.
+- 2026-10-03: Checking a window's look without opening Unity by hand: run the editor (not batch mode) on the throwaway test project with `-executeMethod`, open the window, and after a few seconds copy its pixels with the internal `GUIView.GrabPixels` (reflection, through `EditorWindow.m_Parent`) into a PNG, then `EditorApplication.Exit(0)`. The image comes out upside down. Keep that script out of the repository.
 - 2026-09-28: Added Root Bone and Anchor Fixer (the "Anchor Override fixer" idea, widened to root bones). Built as its own tool, not a button in Lighting Test Scene's renderer check, since that tool is due for a full revision. The override converts skinned mesh bounds to the new root bone so they don't move.
 - 2026-09-28: Versions are bumped only when releasing, not in each tool branch: every branch bumping `package.json` made parallel branches conflict on the same line.
 - 2026-09-28: Added Shader Fallback Preview: a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
@@ -239,4 +263,4 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - Planned: more Lighting Test Scene stations: overbright light, two overlapping pixel lights, a lamp behind or below the avatar, a reflection probe.
 - Idea: Bounds check. Skinned mesh bounds that are too small make parts of the avatar disappear at the edge of the view. Approach still to be discussed: simply setting one shared bounds and root bone on every renderer was judged a little redundant.
 - Idea: Lighting Test Scene contact sheet. Render every station for each material into one image grid (rows: materials, columns: stations A-F) to compare at a glance. To be discussed.
-- Idea: Material comparison tool. Any two materials side by side, with the differences highlighted. Layout to be described later.
+- Idea: Material Comparison follow-ups, not done: copy a value (or every difference) from one material to the other; compare override tags; link the rotation of the two preview spheres.
