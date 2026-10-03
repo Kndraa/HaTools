@@ -62,12 +62,15 @@ namespace HaTools.Tests
             var report = RootBoneAndAnchorFixer.Check(avatar);
             Assert.IsTrue(report.RootBonesMatch);
             Assert.IsTrue(report.AnchorsMatch);
-            StringAssert.Contains("Hips", report.Text);
-            StringAssert.Contains("Hips/Chest", report.Text);
+            // One group per value in use, holding every renderer that uses it
+            Assert.AreSame(hips, report.RootBones.Single().Value);
+            CollectionAssert.AreEquivalent(new Renderer[] { body, hair }, report.RootBones[0].Renderers);
+            Assert.AreSame(chest, report.Anchors.Single().Value);
+            CollectionAssert.AreEquivalent(new Renderer[] { body, hair, glasses }, report.Anchors[0].Renderers);
         }
 
         [Test]
-        public void DifferentRootBonesAndAnchorsListEachRenderer()
+        public void DifferentRootBonesAndAnchorsAreGroupedWithTheirRenderers()
         {
             SetAll(hips, chest);
             hair.rootBone = chest;
@@ -76,9 +79,17 @@ namespace HaTools.Tests
             var report = RootBoneAndAnchorFixer.Check(avatar);
             Assert.IsFalse(report.RootBonesMatch);
             Assert.IsFalse(report.AnchorsMatch);
-            StringAssert.Contains("Hair", report.Text);
-            StringAssert.Contains("Glasses", report.Text);
-            StringAssert.Contains("own bounds centre", report.Text);
+
+            Assert.AreEqual(2, report.RootBones.Count);
+            CollectionAssert.AreEqual(new[] { body }, report.RootBones.Single(g => g.Value == hips).Renderers);
+            CollectionAssert.AreEqual(new[] { hair }, report.RootBones.Single(g => g.Value == chest).Renderers);
+
+            // The most used anchor comes first; renderers without one share a group with no value
+            Assert.AreEqual(2, report.Anchors.Count);
+            Assert.AreSame(chest, report.Anchors[0].Value);
+            CollectionAssert.AreEquivalent(new Renderer[] { body, hair }, report.Anchors[0].Renderers);
+            Assert.IsNull(report.Anchors[1].Value);
+            CollectionAssert.AreEqual(new[] { glasses }, report.Anchors[1].Renderers);
         }
 
         [Test]
