@@ -40,7 +40,7 @@ def main():
 
     tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True, text=True).stdout
     files = sorted(f for f in tracked.split("\0") if f and included(f) and not f.endswith(".meta"))
-    folders = sorted({str(p) for f in files for p in Path(f).parents if str(p) != "."})
+    folders = sorted({p.as_posix() for f in files for p in Path(f).parents if str(p) != "."})
 
     missing = [p for p in folders + files if not (ROOT / (p + ".meta")).is_file()]
     if missing:
