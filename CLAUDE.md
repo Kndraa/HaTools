@@ -200,6 +200,28 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - Shadows aren't tested: no lamp casts shadows (lilToon also ignores cast shadows by default, Receive Shadow 0).
   - Comparing materials side by side: a renderer without an Anchor Override samples probes at its own bounds centre, and pixel/vertex light depends on distance to the lamp. Give the objects being compared the same Anchor Override and the same distance to the lamp, or the difference you see is partly position, not shader.
 
+### Material Comparison
+
+- **File:** `Editor/Tools/MaterialComparison.cs`
+- **Tests:** `Tests/Editor/MaterialComparisonTests.cs`: the rows (identical materials, each kind of change being the only difference, keyword order, two different shaders matched by property name, textures without tiling), the filter and search, writing every kind of value with Undo, and the window noticing edits, Undo and a shader change.
+- **Menu:** Tools > HaTools > Material Comparison (opens a window)
+- **Purpose:** see exactly what differs between two materials (for example a body and a face material that should be lit the same way) and bring them in line without flipping between two inspectors.
+- **How it works:**
+  1. Pick two materials in the fields at the top (the window starts with the materials selected in the Project window). Each material has its own column: its preview sphere (drag to rotate), then one row per setting.
+  2. The rows are the material settings (Shader, Render Queue, GPU Instancing, Double Sided GI, Keywords) followed by every property of the first material's shader in shader order, then the properties only the second material's shader has. A texture is followed by a `<name>_ST` row holding its tiling (X, Y) and offset (Z, W), unless the shader marks it `[NoScaleOffset]`. Labels are the shader's property names (`_MainTex`); hover for the name the inspector shows.
+  3. A row whose values differ is highlighted in both columns. Two different shaders are matched by property name; a property one shader lacks shows "not in this shader" and counts as a difference. Values are compared exactly, with no rounding.
+  4. Every value is an editable field (colour, slider or number, texture, vector, toggle, keyword text) and changes the material straight away, with Undo. The highlight updates as you edit, and changes made elsewhere (the material's inspector, Undo) show up within a moment.
+  5. *Only differences* hides the rows that match. The search box filters by property name or inspector name. The count on the right says how many rows differ.
+- **Settings / options:** none besides the filter and search.
+- **Caveats / known issues:**
+  - Editing writes the raw value, the way an animation does. It doesn't do the extra work a shader's own inspector does (turning on the keyword behind a toggle, lilToon's or Poiyomi's rendering mode presets, the Standard shader's blend settings for a Rendering Mode). For those, use the material's inspector and come back here to check the result.
+  - The Shader row is read-only: change the shader in the material's inspector. Typing -1 as Render Queue goes back to the shader's own queue.
+  - With *Only differences* on, a row you edit until it matches stays in the list (without its highlight) until the filter is used again (toggle it or change the search). Removing it mid-edit would move the keyboard focus to the row that takes its place.
+  - Scrolling the list takes the keyboard focus off the field being edited, for the same reason. Only the rows in view are drawn, so shaders with a very long property list (Poiyomi) stay responsive; that hasn't been tried with Poiyomi or lilToon yet, only with Unity's built-in shaders.
+  - Built-in materials and materials inside a model file are shown with their fields disabled: they can't be changed.
+  - Not compared: override tags (`RenderType`, `VRCFallback`), and values saved in the material for properties its current shader doesn't have.
+  - Poiyomi lists its section headers as properties too, so with it *Only differences* is the practical view.
+
 ### Root Bone and Anchor Fixer
 
 - **File:** `Editor/Tools/RootBoneAndAnchorFixer.cs`
@@ -258,6 +280,8 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-03: Added Material Comparison (the "Material comparison tool" idea). Layout chosen by Kndra: two inspector-like columns with editable fields, differing rows highlighted, and the two preview spheres on top. Fields write raw values through the `Material` API rather than `MaterialEditor.ShaderProperty`: custom drawers (Thry, lilToon) have varying heights and expect their own inspector, and fixed-height rows are what lets the window draw only the rows in view. Rows are rebuilt only when a material, its shader or its dirty count changes.
+- 2026-10-03: Checking a window's look without opening Unity by hand: run the editor (not batch mode) on the throwaway test project with `-executeMethod`, open the window, and after a few seconds copy its pixels with the internal `GUIView.GrabPixels` (reflection, through `EditorWindow.m_Parent`) into a PNG, then `EditorApplication.Exit(0)`. The image comes out upside down. Keep that script out of the repository.
 - 2026-10-03: Added Bounds Fixer (the "Bounds check" idea). Approach chosen by the owner: test poses on a hidden copy rather than one shared bounds for every renderer (redundant with Root Bone and Anchor Fixer), a reach estimate from bone lengths (covers every pose but asks for a 2.5 to 3 m cube on anything that reaches the hands) or the current pose only (finds nothing on an avatar at rest). The copy lives in a preview scene under a disabled object, so the user's scene isn't modified and no script on the copy runs. Arm muscle values were found by sweeping them on the test humanoid (T-pose is Down-Up 0.4, Front-Back 0.3; straight ahead is 0.2 / -0.6, not Front-Back -1, which crosses the arms). Not tried on a real avatar yet.
 - 2026-10-03: Lighting Test Scene: added stations G (overbright realtime lamp) and H (reflection probe with E's lamp, so E is its control). The probe uses a solid sky colour rather than a skybox: a skybox is scene-wide and would give the dark stations a bright reflection. Not adding: two overlapping pixel lights and realtime shadows (lilToon-specific or off by default), and the contact sheet (dropped by the owner).
 - 2026-10-02: Lighting Test Scene revised into a window: avatar field, one button per station, and buttons to create, open, return from and delete the test scene. The avatar is copied into the test scene instead of being dragged in by hand, and the scenes that were open, the camera and the avatar are restored on return. The test scene is kept between sessions so it isn't baked every time. The renderer check was removed (Root Bone and Anchor Fixer covers light anchors). Considered and dropped: building the stage in the user's own scene (a real bake there replaces that scene's lighting data, and faking the probes means overriding the scene's own lights and environment), and a viewport inside the window (Unity can't bake a window's private scene).
@@ -275,4 +299,4 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
 - Idea: Lighting Test Scene station with a lamp behind or below the avatar.
-- Idea: Material comparison tool. Any two materials side by side, with the differences highlighted. Layout to be described later.
+- Idea: Material Comparison follow-ups, not done: copy a value (or every difference) from one material to the other; compare override tags; link the rotation of the two preview spheres.
