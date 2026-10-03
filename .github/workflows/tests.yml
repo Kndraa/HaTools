@@ -28,7 +28,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the VPM listing is built from the version tags
       - run: python3 .github/scripts/build_unitypackage.py
+      # Nothing is published from here: this only checks that the release's listing script still runs
+      - run: python3 .github/scripts/build_vpm_listing.py
       - uses: actions/upload-artifact@v4
         with:
           name: unitypackage
