@@ -1,0 +1,25 @@
+{
+  "name": "HaTools",
+  "id": "com.kndra.hatools",
+  "url": "https://kndraa.github.io/HaTools/index.json",
+  "author": "Kndra",
+  "packages": {
+    "com.kndra.hatools": {
+      "versions": {
+        "0.3.1": {
+          "name": "com.kndra.hatools",
+          "displayName": "HaTools",
+          "version": "0.3.1",
+          "unity": "2022.3",
+          "description": "Various tools useful for avatar creation",
+          "author": {
+            "name": "Kndra"
+          },
+          "license": "MIT",
+          "vpmDependencies": {},
+          "url": "https://github.com/Kndraa/HaTools/releases/download/v0.3.1/com.kndra.hatools-0.3.1.zip"
+        }
+      }
+    }
+  }
+}
