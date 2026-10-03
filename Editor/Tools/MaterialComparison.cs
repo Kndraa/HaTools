@@ -13,7 +13,6 @@ namespace HaTools
         const string Title = "Material Comparison";
         const float RowHeight = 20f, PreviewHeight = 140f, ScrollbarWidth = 14f;
         static readonly Color Highlight = new Color(1f, 0.55f, 0f, 0.25f);
-        static readonly GUIContent[] Axes = { new GUIContent("X"), new GUIContent("Y"), new GUIContent("Z"), new GUIContent("W") };
 
         [MenuItem(HaToolsMenu.Root + Title)]
         static void Open() => GetWindow<MaterialComparison>(Title).minSize = new Vector2(560f, 320f);
@@ -188,9 +187,7 @@ namespace HaTools
                     bool hdr = (m.shader.GetPropertyFlags(index) & ShaderPropertyFlags.HDR) != 0;
                     return EditorGUI.ColorField(r, GUIContent.none, color, true, true, hdr);
                 case Vector4 vector:
-                    var xyzw = new[] { vector.x, vector.y, vector.z, vector.w };
-                    EditorGUI.MultiFloatField(r, Axes, xyzw);
-                    return new Vector4(xyzw[0], xyzw[1], xyzw[2], xyzw[3]);
+                    return EditorGUI.Vector4Field(r, GUIContent.none, vector);
                 default: // a texture, or null for an empty texture slot
                     return EditorGUI.ObjectField(r, (Texture)value, typeof(Texture), false);
             }
