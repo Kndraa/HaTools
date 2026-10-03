@@ -35,6 +35,7 @@ namespace HaTools
             "F - Red and blue baked lamps (split lighting)",
             "G - Overbright realtime lamp (pixel light)",
             "H - Reflection probe, neutral white baked lamp",
+            "I - Backlight, baked white lamp behind and below",
         };
 
         // What to look for at each station. lilToon's defaults: CLAUDE.md > Lighting Test Scene > Reading the results.
@@ -50,6 +51,9 @@ namespace HaTools
             "A white pixel light several times brighter than C's. A shader without a limit blows out to white; lilToon caps it at Light Max Limit (1).",
             "The same as E plus a reflection probe: metallic and glossy materials reflect a pale sky, the floor and the wall. " +
             "At every other station they reflect black.",
+            "E's lamp moved behind the avatar and down to the floor. A shader that shades by direction lights the back and the undersides and " +
+            "leaves the front dark. lilToon turns probe light from below into light from above, so it shades as if lit from behind and above; " +
+            "its Backlight and its rim light's Light Direction Strength (both off by default) show here.",
         };
 
         static readonly Color Warm = new Color(1f, 0.7f, 0.35f);
@@ -116,11 +120,11 @@ namespace HaTools
                 EditorGUILayout.HelpBox("Pick an object inside the test scene.", MessageType.Warning);
 
             if (Lightmapping.isRunning)
-                EditorGUILayout.HelpBox("Baking (progress bar at the bottom right). Stations A, E, F and H are only lit once it finishes; " +
+                EditorGUILayout.HelpBox("Baking (progress bar at the bottom right). Stations A, E, F, H and I are only lit once it finishes; " +
                                         "wait for it before entering Play mode.", MessageType.Info);
             else if (Lightmapping.lightingDataAsset == null)
             {
-                EditorGUILayout.HelpBox("The scene isn't baked: stations A, E, F and H are unlit.", MessageType.Warning);
+                EditorGUILayout.HelpBox("The scene isn't baked: stations A, E, F, H and I are unlit.", MessageType.Warning);
                 using (new EditorGUI.DisabledScope(playing))
                     if (GUILayout.Button("Bake")) Lightmapping.BakeAsync();
             }
@@ -363,6 +367,9 @@ namespace HaTools
                     case 7: // E's lamp, so E shows the same light without reflections
                         AddLamp(st, "White Lamp (Baked)", lampPos, Color.white, 2f, LightmapBakeType.Baked, LightRenderMode.Auto, whiteBulb);
                         AddReflectionProbe(st);
+                        break;
+                    case 8: // E's lamp behind (-Z) and below the avatar, so E shows the same light from the front
+                        AddLamp(st, "White Lamp (Baked, behind and below)", new Vector3(0.75f, 0.3f, -1.2f), Color.white, 2f, LightmapBakeType.Baked, LightRenderMode.Auto, whiteBulb);
                         break;
                 }
             }

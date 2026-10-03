@@ -124,6 +124,11 @@ namespace HaTools.Tests
             Assert.AreEqual(LightRenderMode.ForcePixel, LampAt(6).renderMode, "G: pixel light");
             Assert.Greater(LampAt(6).intensity, LampAt(2).intensity, "G: brighter than C");
             Assert.AreEqual(LightmapBakeType.Baked, LampAt(7).lightmapBakeType, "H: baked lamp");
+
+            Assert.AreEqual(LightmapBakeType.Baked, LampAt(8).lightmapBakeType, "I: baked lamp");
+            var behindAndBelow = LampAt(8).transform.localPosition;
+            Assert.Less(behindAndBelow.z, -0.5f, "I: behind the avatar");
+            Assert.Less(behindAndBelow.y, 0.6f, "I: below the avatar's body");
         }
 
         [Test]
@@ -422,6 +427,15 @@ namespace HaTools.Tests
             var right = Irradiance(5, Vector3.right);
             Assert.Greater(left.r, left.b, $"F: side facing -X should be red: {left}");
             Assert.Greater(right.b, right.r, $"F: side facing +X should be blue: {right}");
+        }
+
+        [Test]
+        public void BacklightStationIsLitFromBehindAndBelow()
+        {
+            var towardsLamp = new Vector3(0f, -1f, -1f).normalized;
+            float back = Irradiance(8, towardsLamp).grayscale, front = Irradiance(8, -towardsLamp).grayscale;
+            Assert.Greater(back, Front(3).grayscale * 3f, "I: baked lamp should be much brighter than D");
+            Assert.Greater(back, front * 2f, "I: the side facing back and down should be the bright one");
         }
 
         [Test]
