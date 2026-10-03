@@ -102,7 +102,9 @@ namespace HaTools
         {
             EditorGUILayout.BeginHorizontal();
             bool any = group.Any(e => e.Show);
-            if (GUILayout.Toggle(any, GUIContent.none, GUILayout.Width(16)) != any)
+            // An empty foldout has no checkbox, only the room for one so the titles stay lined up
+            if (group.Count == 0) GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.toggle, GUILayout.Width(16));
+            else if (GUILayout.Toggle(any, GUIContent.none, GUILayout.Width(16)) != any)
                 foreach (var e in group) e.Show = !any;
             open = EditorGUILayout.Foldout(open, $"{title} ({group.Count})", true);
             EditorGUILayout.EndHorizontal();
