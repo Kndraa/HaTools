@@ -191,19 +191,12 @@ namespace HaTools
         [Serializable]
         class ReturnState
         {
-            public List<SceneEntry> Scenes = new List<SceneEntry>();
+            public SceneSetup[] Scenes = new SceneSetup[0];
             public string Avatar; // GlobalObjectId: the object reference itself is lost when its scene closes
             public bool HasView, Ortho;
             public Vector3 Pivot;
             public Quaternion Rotation;
             public float Size;
-        }
-
-        [Serializable]
-        struct SceneEntry
-        {
-            public string Path;
-            public bool Loaded, Active;
         }
 
         internal static IEnumerable<GameObject> Copies(Scene scene) => scene.GetRootGameObjects().Where(g => g.name.EndsWith(CopySuffix));
@@ -212,11 +205,13 @@ namespace HaTools
         // without saving them and remembers them for ReturnToMainScene. No dialogs, no bake. Every open scene must be saved to a file.
         internal static GameObject EnterTestScene(GameObject avatar)
         {
-            var active = SceneManager.GetActiveScene();
             var open = Enumerable.Range(0, SceneManager.sceneCount).Select(SceneManager.GetSceneAt).Where(s => s.path != ScenePath).ToArray();
 
-            var state = new ReturnState { Avatar = GlobalObjectId.GetGlobalObjectIdSlow(avatar).ToString() };
-            foreach (var s in open) state.Scenes.Add(new SceneEntry { Path = s.path, Loaded = s.isLoaded, Active = s == active });
+            var state = new ReturnState
+            {
+                Scenes = EditorSceneManager.GetSceneManagerSetup().Where(s => s.path != ScenePath).ToArray(),
+                Avatar = GlobalObjectId.GetGlobalObjectIdSlow(avatar).ToString(),
+            };
             var sv = SceneView.lastActiveSceneView;
             if (sv != null)
             {
@@ -260,16 +255,15 @@ namespace HaTools
             var state = JsonUtility.FromJson<ReturnState>(EditorUserSettings.GetConfigValue(ReturnKey) ?? "") ?? new ReturnState();
             EditorUserSettings.SetConfigValue(ReturnKey, "");
 
-            var scenes = state.Scenes.Where(s => File.Exists(s.Path)).ToList();
-            if (scenes.Count == 0)
+            var scenes = state.Scenes.Where(s => File.Exists(s.path)).ToArray();
+            if (scenes.Length == 0)
                 EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             else
             {
                 // Unity wants exactly one active scene and it has to be loaded (the old one may have been deleted meanwhile)
-                int active = scenes.FindIndex(s => s.Active);
-                if (active < 0) active = Mathf.Max(0, scenes.FindIndex(s => s.Loaded));
-                EditorSceneManager.RestoreSceneManagerSetup(scenes
-                    .Select((s, i) => new SceneSetup { path = s.Path, isLoaded = s.Loaded || i == active, isActive = i == active }).ToArray());
+                var active = scenes.FirstOrDefault(s => s.isActive) ?? scenes.FirstOrDefault(s => s.isLoaded) ?? scenes[0];
+                active.isActive = active.isLoaded = true;
+                EditorSceneManager.RestoreSceneManagerSetup(scenes);
             }
 
             var sv = SceneView.lastActiveSceneView;
