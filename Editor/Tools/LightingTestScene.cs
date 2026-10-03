@@ -137,12 +137,8 @@ namespace HaTools
             if (string.IsNullOrEmpty(EditorUserSettings.GetConfigValue(ReturnKey)))
                 EditorGUILayout.HelpBox("This scene wasn't opened from this window, so there is no scene to return to: returning opens a new empty scene.", MessageType.Info);
             using (new EditorGUI.DisabledScope(playing))
-            {
                 if (GUILayout.Button("Return to Main Scene", GUILayout.Height(28)))
                     EditorApplication.delayCall += () => Leave(false);
-                if (GUILayout.Button("Return and Delete Test Scene", GUILayout.Height(28)))
-                    EditorApplication.delayCall += () => Leave(true);
-            }
             if (playing) EditorGUILayout.HelpBox("Exit Play mode to return or bake.", MessageType.Info);
         }
 
@@ -166,7 +162,7 @@ namespace HaTools
         void GoToStation(int i)
         {
             station = i;
-            if (avatar != null) MoveToStation(new[] { avatar.transform }, i);
+            if (avatar != null) MoveToStation(avatar.transform, i);
             FrameStation(i);
         }
 
@@ -210,7 +206,7 @@ namespace HaTools
             public bool Loaded, Active;
         }
 
-        static IEnumerable<GameObject> Copies(Scene scene) => scene.GetRootGameObjects().Where(g => g.name.EndsWith(CopySuffix));
+        internal static IEnumerable<GameObject> Copies(Scene scene) => scene.GetRootGameObjects().Where(g => g.name.EndsWith(CopySuffix));
 
         // Opens the test scene (building it first if there is none) with a copy of the avatar in it, closes the other scenes
         // without saving them and remembers them for ReturnToMainScene. No dialogs, no bake. Every open scene must be saved to a file.
@@ -375,7 +371,6 @@ namespace HaTools
             sunGO.SetActive(false);
 
             // Fast, low-resolution bake settings (we only care about light probes)
-            AssetDatabase.DeleteAsset(SettingsPath);
             var ls = new LightingSettings();
             ls.bakedGI = true;
             ls.realtimeGI = false;
@@ -395,29 +390,23 @@ namespace HaTools
 
         // ---------------------------------------------------------------- Stations
 
-        // Moves the objects that are inside the test scene to a station, facing +Z, with Undo. Returns how many were moved.
-        internal static int MoveToStation(IEnumerable<Transform> objects, int i)
+        // Moves an object that is inside the test scene to a station, facing +Z, with Undo. Returns false for objects in other scenes.
+        internal static bool MoveToStation(Transform t, int i)
         {
-            var targets = objects.Where(t => t.gameObject.scene.path == ScenePath).ToArray();
-            if (targets.Length == 0) return 0;
+            if (t.gameObject.scene.path != ScenePath) return false;
 
-            Undo.RecordObjects(targets, "Move to lighting station");
-            foreach (var t in targets)
-            {
-                t.position = StationPos(i);
-                t.rotation = Quaternion.identity;
-            }
-            return targets.Length;
+            Undo.RecordObject(t, "Move to lighting station");
+            t.SetPositionAndRotation(StationPos(i), Quaternion.identity);
+            return true;
         }
 
         // ---------------------------------------------------------------- Helpers
 
         static Material CreateMat(string name, Color color, string shader = "Standard")
         {
-            string path = $"{Folder}/{name}.mat";
-            AssetDatabase.DeleteAsset(path);
+            // CreateAsset replaces an asset left at the path by an earlier build
             var mat = new Material(Shader.Find(shader)) { color = color };
-            AssetDatabase.CreateAsset(mat, path);
+            AssetDatabase.CreateAsset(mat, $"{Folder}/{name}.mat");
             return mat;
         }
 

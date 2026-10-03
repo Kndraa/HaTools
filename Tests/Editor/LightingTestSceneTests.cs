@@ -138,7 +138,7 @@ namespace HaTools.Tests
             avatar.transform.SetPositionAndRotation(start, startRotation);
 
             Undo.IncrementCurrentGroup();
-            Assert.AreEqual(1, LightingTestScene.MoveToStation(new[] { avatar.transform }, 2));
+            Assert.IsTrue(LightingTestScene.MoveToStation(avatar.transform, 2));
             Assert.AreEqual(LightingTestScene.StationPos(2), avatar.transform.position);
             Assert.Less(Quaternion.Angle(Quaternion.identity, avatar.transform.rotation), 0.01f);
 
@@ -155,7 +155,7 @@ namespace HaTools.Tests
             var start = new Vector3(5f, 0f, 5f);
             avatar.transform.position = start;
 
-            Assert.AreEqual(0, LightingTestScene.MoveToStation(new[] { avatar.transform }, 1));
+            Assert.IsFalse(LightingTestScene.MoveToStation(avatar.transform, 1));
             Assert.AreEqual(start, avatar.transform.position);
         }
     }
@@ -170,8 +170,6 @@ namespace HaTools.Tests
 
         [TearDown]
         public void RemoveGeneratedAssets() => LightingTestMainScene.RemoveGenerated();
-
-        static int CopiesIn(Scene scene) => scene.GetRootGameObjects().Count(g => g.name.EndsWith(LightingTestScene.CopySuffix));
 
         [Test]
         public void EnterOpensTheTestSceneWithACopyAndClosesTheMainScene()
@@ -236,7 +234,7 @@ namespace HaTools.Tests
             LightingTestScene.ReturnToMainScene();
 
             var test = EditorSceneManager.OpenScene(LightingTestScene.ScenePath, OpenSceneMode.Additive);
-            Assert.AreEqual(0, CopiesIn(test));
+            Assert.AreEqual(0, LightingTestScene.Copies(test).Count());
             Assert.IsNotNull(test.GetRootGameObjects().SingleOrDefault(g => g.name == LightingTestScene.StationsRootName));
         }
 
@@ -249,7 +247,20 @@ namespace HaTools.Tests
             EditorSceneManager.OpenScene(LightingTestMainScene.Path);
 
             LightingTestScene.EnterTestScene(GameObject.Find("Avatar"));
-            Assert.AreEqual(1, CopiesIn(SceneManager.GetActiveScene()));
+            Assert.AreEqual(1, LightingTestScene.Copies(SceneManager.GetActiveScene()).Count());
+        }
+
+        [Test]
+        public void BuildReplacesAssetsLeftByAnEarlierBuild()
+        {
+            LightingTestScene.EnterTestScene(avatar);
+            var original = LightingTestScene.ReturnToMainScene();
+            // The scene deleted by hand: its materials and lighting settings are still in the folder
+            AssetDatabase.DeleteAsset(LightingTestScene.ScenePath);
+
+            LightingTestScene.EnterTestScene(original);
+            Assert.IsNotNull(Lightmapping.lightingSettings);
+            Assert.AreEqual(LightingTestScene.SettingsPath, AssetDatabase.GetAssetPath(Lightmapping.lightingSettings));
         }
 
         [Test]
