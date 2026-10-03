@@ -56,8 +56,9 @@ Tests/Editor/
   <ToolName>Tests.cs         One test file per tool
 .github/
   workflows/tests.yml        CI: compiles the package in Unity and runs the tests
-  workflows/release.yml      Publishes a .unitypackage when a version tag is pushed
-  scripts/build_unitypackage.py  Builds the .unitypackage (no Unity needed)
+  workflows/release.yml      Publishes a release and the VCC listing when a version tag is pushed
+  scripts/build_unitypackage.py  Builds the .unitypackage and the VPM .zip (no Unity needed)
+  scripts/build_vpm_listing.py   Builds the VCC listing and its "Add to VCC" page from the version tags
   test-project/              Throwaway Unity project the CI installs the package into
 ```
 
@@ -113,15 +114,17 @@ Until the secrets exist, every run fails straight away at the "Check Unity licen
 
 ## Releasing
 
-Releases are a single `.unitypackage` attached to a GitHub Release. It contains only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. It installs into `Packages/com.kndra.hatools/`, so Unity treats it as a real package and Package Manager shows its name and version.
+A release is a GitHub Release with two files: `HaTools-<version>.unitypackage` to import by hand, and `com.kndra.hatools-<version>.zip` for the VRChat Creator Companion (VCC). Both contain only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. Both install into `Packages/com.kndra.hatools/`, so Unity treats it as a real package and Package Manager shows its name and version.
 
 1. Bump `version` in `package.json` (see Versioning) in a commit of its own and merge it to `main`. Wait for the tests to pass.
 2. Tag that commit with the same version and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds `HaTools-<version>.unitypackage` and creates the GitHub Release with generated notes.
+3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds both files, creates the GitHub Release with generated notes and republishes the VCC listing.
 
-`.github/scripts/build_unitypackage.py` builds the package without Unity. It takes `package.json` and the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. The same commit always gives a byte-identical file. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
+`.github/scripts/build_unitypackage.py` builds the package without Unity. It takes `package.json` and the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. It writes the `.unitypackage` and the `.zip` (the same files under their own paths, with `package.json` at the root, which is the layout the VCC installs). The same commit always gives byte-identical files. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
 
-While the repository is private, only people with access to it can download releases. Importing a newer `.unitypackage` updates the files in place, but files removed from the package stay behind; delete `Packages/com.kndra.hatools` before importing if a release removed or renamed files.
+**VCC listing:** the VCC installs packages from a listing, a JSON file that names every version and where its `.zip` is. `.github/scripts/build_vpm_listing.py` builds it from the `v*` tags (each tag's `package.json` plus the address of that release's `.zip`), together with a small page whose only job is to open a `vcc://vpm/addRepo` link: GitHub removes `vcc://` links from a README, so the README links to that page instead. The release workflow pushes both to the `gh-pages` branch (one commit, replaced every release), which GitHub Pages serves at `https://kndraa.github.io/HaTools/` (`index.json` is the listing users can paste into the VCC under Settings > Packages > Add Repository). GitHub switched Pages on by itself when the `gh-pages` branch was first pushed (2026-10-03); the setting is under **Settings > Pages**, with `gh-pages` as the source. The tests workflow also runs the script, without publishing, so a broken script shows up before a release.
+
+Importing a newer `.unitypackage` updates the files in place, but files removed from the package stay behind; delete `Packages/com.kndra.hatools` before importing if a release removed or renamed files.
 
 ## Versioning
 
@@ -283,6 +286,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-03: Added VCC support: releases attach a VPM `.zip`, and a listing plus an "Add to VCC" page are published to GitHub Pages from the `gh-pages` branch. Done with two small Python scripts rather than VRChat's package template and listing action, to match the existing Unity-free release build. The listing is pushed to a branch instead of deployed with the Pages actions because that deployment's environment only accepts runs from the default branch, and a release runs from a tag. The first listing and the 0.3.1 `.zip` were published by hand, since 0.3.1 was released before this existed. Not tried in the VCC itself yet.
 - 2026-10-03: Root Bone and Anchor Fixer: the check's result was a block of text and the owner found it unreadable. It is now two foldouts (root bones, light anchors), each holding one foldout per value in use with the renderers that use it. The foldouts show the check as it was when the button was pressed; they are not refreshed after Undo or edits made elsewhere.
 - 2026-10-03: Bounds Fixer: the single *Show bounds in the Scene view* toggle and the flat list became two foldouts, *Incorrect bounds* and *Correct bounds*, asked for by the owner (the same shape as Root Bone and Anchor Fixer's check). Each renderer has a checkbox for its box, and each foldout has one that is on while any of its renderers is on. Unity has no control that links a parent checkbox to its children, so the foldout's state is worked out from the renderers each time it is drawn. Correct renderers start unchecked, so a full avatar doesn't fill the Scene view with green boxes. The yellow box has no checkbox of its own: it is drawn together with the red box of each incorrect renderer that is on.
 - 2026-10-03: Added Material Comparison (the "Material comparison tool" idea). Layout chosen by Kndra: two inspector-like columns with editable fields, differing rows highlighted, and the two preview spheres on top. Fields write raw values through the `Material` API rather than `MaterialEditor.ShaderProperty`: custom drawers (Thry, lilToon) have varying heights and expect their own inspector, and fixed-height rows are what lets the window draw only the rows in view. Rows are rebuilt only when a material, its shader or its dirty count changes.

@@ -1,4 +1,5 @@
-# Pushing a tag like v0.2.0 builds a .unitypackage and publishes it as a GitHub Release. Full docs: CLAUDE.md > Releasing.
+# Pushing a tag like v0.2.0 builds a .unitypackage and a VPM .zip, publishes them as a GitHub Release and updates the
+# listing the VRChat Creator Companion reads. Full docs: CLAUDE.md > Releasing.
 name: Release
 
 on:
@@ -15,6 +16,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the VPM listing is built from every version tag
 
       - name: Check tag matches package.json version
         run: |
@@ -25,10 +28,21 @@ jobs:
           fi
           echo "VERSION=${version}" >> "$GITHUB_ENV"
 
-      - name: Build .unitypackage
+      - name: Build .unitypackage and .zip
         run: python3 .github/scripts/build_unitypackage.py
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" "HaTools-${VERSION}.unitypackage" --title "HaTools ${VERSION}" --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" "HaTools-${VERSION}.unitypackage" "com.kndra.hatools-${VERSION}.zip" --title "HaTools ${VERSION}" --generate-notes
+
+      # GitHub Pages serves the gh-pages branch: the listing and the "Add to VCC" page, replaced on every release
+      - name: Publish VPM listing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/build_vpm_listing.py site
+          git -C site init -q -b gh-pages
+          git -C site add -A
+          git -C site -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "VPM listing for ${GITHUB_REF_NAME}"
+          git -C site push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

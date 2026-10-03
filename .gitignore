@@ -4,3 +4,8 @@ Thumbs.db
 .vs/
 .idea/
 *.swp
+
+# Build output (.github/scripts)
+*.unitypackage
+/*.zip
+/site/

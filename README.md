@@ -10,7 +10,7 @@ A lightweight, editor-only Unity package of small scripts that run quickly. They
 
 ## Installation
 
-- **VRChat Creator Companion:** coming soon.
+- **VRChat Creator Companion:** [add HaTools to the VCC](https://kndraa.github.io/HaTools/) with one click. Or copy `https://kndraa.github.io/HaTools/index.json` and paste it into the VCC under **Settings > Packages > Add Repository**. Then add HaTools to your project from the VCC's **Manage Project** page.
 - **.unitypackage:** download `HaTools-<version>.unitypackage` from the latest [release](../../releases) and open it in Unity (**Assets > Import Package > Custom Package...**). It installs into `Packages/com.kndra.hatools`.
 - **Manual:** copy this repository into your project's `Packages/com.kndra.hatools` folder.
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-# Builds a .unitypackage of this package without Unity. Full docs: CLAUDE.md > Releasing.
+# Builds a .unitypackage and a VPM .zip of this package without Unity. Full docs: CLAUDE.md > Releasing.
 #
 # A .unitypackage is a .tar.gz with one folder per asset, named by the asset's GUID, holding:
 #   asset       the file itself (left out for folders)
 #   asset.meta  its .meta file
 #   pathname    where Unity puts it, e.g. Packages/com.kndra.hatools/Editor/Core/HaToolsMenu.cs
+#
+# The .zip is what the VRChat Creator Companion installs: the same files under their own paths, package.json at the root.
 #
 # Only package.json and the scripts ship: everything under Editor/ (tools, shared menu, assembly definition).
 import gzip
@@ -14,6 +16,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,7 +40,7 @@ def main():
 
     tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True, text=True).stdout
     files = sorted(f for f in tracked.split("\0") if f and included(f) and not f.endswith(".meta"))
-    folders = sorted({str(p) for f in files for p in Path(f).parents if str(p) != "."})
+    folders = sorted({p.as_posix() for f in files for p in Path(f).parents if str(p) != "."})
 
     missing = [p for p in folders + files if not (ROOT / (p + ".meta")).is_file()]
     if missing:
@@ -74,7 +77,15 @@ def main():
     with open(out, "wb") as f, gzip.GzipFile(filename="", fileobj=f, mode="wb", mtime=0) as gz:
         gz.write(buf.getvalue())
 
-    print(f"Built {out} ({len(files)} files, {len(folders)} folders):")
+    zip_out = ROOT / f"{package['name']}-{package['version']}.zip"
+    with zipfile.ZipFile(zip_out, "w") as z:
+        for path in sorted(files + [p + ".meta" for p in folders + files]):
+            # Fixed date, for the same reason as the mtime above
+            info = zipfile.ZipInfo(Path(path).as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type, info.external_attr = zipfile.ZIP_DEFLATED, 0o644 << 16
+            z.writestr(info, (ROOT / path).read_bytes())
+
+    print(f"Built {out} and {zip_out} ({len(files)} files, {len(folders)} folders):")
     for path in folders + files:
         print(f"  {install_dir}/{path}")
 
