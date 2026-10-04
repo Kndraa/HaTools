@@ -228,6 +228,23 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
   - Not compared: override tags (`RenderType`, `VRCFallback`), and values saved in the material for properties its current shader doesn't have.
   - Poiyomi lists its section headers as properties too, so with it *Only differences* is the practical view.
 
+### Package Search
+
+- **Status:** in progress. Done: the window, its two tabs, the GitHub search and the result list with *Open in Browser*. Not done: the VPM listing check, Install / Remove, and the *Installed* tab.
+- **File:** `Editor/Tools/PackageSearch.cs`
+- **Tests:** `Tests/Editor/PackageSearchTests.cs`: the search address (qualifier and limit added, query escaped, blank query refused), reading GitHub's reply (fields, null description, at most 30 results in GitHub's order, empty replies) and the error messages (rate limit with the time to wait, offline, bad query, other codes). No network calls.
+- **Menu:** Tools > HaTools > Package Search (opens a window)
+- **Purpose:** find VRChat packages on GitHub and install the ones that publish a VPM listing into the open project, the way the VRChat Creator Companion (VCC) does, without leaving Unity.
+- **How it works:**
+  1. *Search* tab: type a query and press Enter (or *Search*). Each search is one call to GitHub's repository search API, never one per keystroke. `topic:vrchat` is added to the query to keep results to VRChat repos. The first 30 results are listed, in GitHub's order, each with its name, stars, description and an *Open in Browser* button.
+  2. Planned: each result is checked for a VPM listing; results with one get a green *Install* button, then *Remove* once installed.
+  3. Planned: *Installed* tab lists the packages in the `locked` section of `Packages/vpm-manifest.json` with their pinned versions and a *Remove* button. No network needed.
+- **Settings / options:** none.
+- **Caveats / known issues:**
+  - GitHub allows 10 searches a minute without signing in (per network address). Past that the window says how many seconds to wait, from GitHub's `X-RateLimit-Reset` header.
+  - Only repos tagged with the `vrchat` topic are found. GitHub ANDs qualifiers, so adding `topic:vpm` too would only find repos tagged with both.
+  - Not tried against the live API yet: the cloud sessions can't reach GitHub's search endpoint, so the parsing is tested against replies written from GitHub's documented format.
+
 ### Root Bone and Anchor Fixer
 
 - **File:** `Editor/Tools/RootBoneAndAnchorFixer.cs`
@@ -286,6 +303,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-04: Started Package Search (search GitHub, install VPM packages). Decisions made with the owner: everything stays inside Unity, with no call to the `vpm` command-line tool, since users can't be assumed to have it; look at the VPM Resolver package (`com.vrchat.core.vpm-resolver`, in every VRChat project) before writing any listing reading, dependency resolution or manifest writing of our own; write `vpm-manifest.json` the way the VCC does so both stay in step; v1 only installs packages whose dependencies are already met and says which are missing otherwise. Searching is one API call per Enter (GitHub's unsigned limit is 10 a minute); listing checks and downloads go to other hosts (GitHub Pages, release downloads), which don't count against it. Built in steps: window, result model and search first.
 - 2026-10-03: Added VCC support: releases attach a VPM `.zip`, and a listing plus an "Add to VCC" page are published to GitHub Pages from the `gh-pages` branch. Done with two small Python scripts rather than VRChat's package template and listing action, to match the existing Unity-free release build. The listing is pushed to a branch instead of deployed with the Pages actions because that deployment's environment only accepts runs from the default branch, and a release runs from a tag. The first listing and the 0.3.1 `.zip` were published by hand, since 0.3.1 was released before this existed. Not tried in the VCC itself yet.
 - 2026-10-03: Root Bone and Anchor Fixer: the check's result was a block of text and the owner found it unreadable. It is now two foldouts (root bones, light anchors), each holding one foldout per value in use with the renderers that use it. The foldouts show the check as it was when the button was pressed; they are not refreshed after Undo or edits made elsewhere.
 - 2026-10-03: Bounds Fixer: the single *Show bounds in the Scene view* toggle and the flat list became two foldouts, *Incorrect bounds* and *Correct bounds*, asked for by the owner (the same shape as Root Bone and Anchor Fixer's check). Each renderer has a checkbox for its box, and each foldout has one that is on while any of its renderers is on. Unity has no control that links a parent checkbox to its children, so the foldout's state is worked out from the renderers each time it is drawn. Correct renderers start unchecked, so a full avatar doesn't fill the Scene view with green boxes. The yellow box has no checkbox of its own: it is drawn together with the red box of each incorrect renderer that is on.
