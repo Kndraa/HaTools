@@ -1,0 +1,72 @@
+# Bumps the version and publishes a release for every merged PR that changes the package.
+# Full notes: CLAUDE.md > Versioning and Releasing.
+name: Version and release
+
+on:
+  # pull_request_target runs with a token that can push, also for PRs from forks. Safe here: the
+  # PR's own code is never checked out or run, only main after the merge.
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+# One merge at a time, in order, so two quick merges don't pick the same version
+concurrency:
+  group: version-and-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  bump:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # A release only holds package.json and Editor/, so PRs that change neither (docs, CI) aren't released
+      - name: Check the PR changes the package
+        id: changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          files=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')
+          if echo "$files" | grep -qE '^(Editor/|package\.json$)'; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No change to Editor/ or package.json: nothing new to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version, commit and tag
+        id: bump
+        if: steps.changed.outputs.release == 'true'
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          version=$(python3 .github/scripts/bump_version.py "$LABELS")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "Release v${version} (#${PR})"
+          git tag "v${version}"
+          git push --atomic origin HEAD:main "v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Released as v${version}" >> "$GITHUB_STEP_SUMMARY"
+
+  # A tag pushed with the workflow's token doesn't start release.yml by itself, so it's called here
+  release:
+    needs: bump
+    if: needs.bump.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.bump.outputs.tag }}
+    permissions:
+      contents: write

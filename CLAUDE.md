@@ -56,7 +56,9 @@ Tests/Editor/
   <ToolName>Tests.cs         One test file per tool
 .github/
   workflows/tests.yml        CI: compiles the package in Unity and runs the tests
-  workflows/release.yml      Publishes a release and the VCC listing when a version tag is pushed
+  workflows/version.yml      On every merged PR: bumps the version from the PR's label, tags it and runs release.yml
+  workflows/release.yml      Publishes a release and the VCC listing for a version tag
+  scripts/bump_version.py    Bumps "version" in package.json (used by version.yml)
   scripts/build_unitypackage.py  Builds the .unitypackage and the VPM .zip (no Unity needed)
   scripts/build_vpm_listing.py   Builds the VCC listing and its "Add to VCC" page from the version tags
   test-project/              Throwaway Unity project the CI installs the package into
@@ -82,7 +84,7 @@ Tests/Editor/
 5. Add one line for the tool under **Tools** in `README.md`.
 6. Where practical, add `Tests/Editor/<ToolName>Tests.cs` (see Testing).
 7. Open the package in Unity once so `.meta` files are generated, and commit them.
-8. Don't bump `version` in `package.json`: it only changes when releasing (see Versioning).
+8. Don't bump `version` in `package.json`: merging the PR does it. Label the PR `minor` (a new tool), see Versioning.
 
 ## Testing
 
@@ -114,11 +116,18 @@ Until the secrets exist, every run fails straight away at the "Check Unity licen
 
 ## Releasing
 
-A release is a GitHub Release with two files: `HaTools-<version>.unitypackage` to import by hand, and `com.kndra.hatools-<version>.zip` for the VRChat Creator Companion (VCC). Both contain only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. Both install into `Packages/com.kndra.hatools/`, so Unity treats it as a real package and Package Manager shows its name and version.
+Every merged PR that changes the package is released automatically. A release is a GitHub Release with two files: `HaTools-<version>.unitypackage` to import by hand, and `com.kndra.hatools-<version>.zip` for the VRChat Creator Companion (VCC). Both contain only `package.json` and the scripts: everything under `Editor/` (the tools, the shared menu code and the assembly definition). No README, licence, tests or docs. Both install into `Packages/com.kndra.hatools/`, so Unity treats it as a real package and Package Manager shows its name and version.
 
-1. Bump `version` in `package.json` (see Versioning) in a commit of its own and merge it to `main`. Wait for the tests to pass.
-2. Tag that commit with the same version and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` checks the tag matches `package.json`, builds both files, creates the GitHub Release with generated notes and republishes the VCC listing.
+1. Open a PR into `main` with a `major`, `minor` or `patch` label (see Versioning). Don't change `version` in the PR.
+2. Merge it. `.github/workflows/version.yml` runs on the merge:
+   - If the PR changed nothing under `Editor/` and not `package.json` (docs, CI, tests only), it stops: a release would hold the same files.
+   - Otherwise `.github/scripts/bump_version.py` bumps `version` in `package.json` from the PR's label (the highest of `major` / `minor` / `patch`; no label means `patch`). The workflow commits that to `main` as "Release v<version> (#<PR>)" (as `github-actions[bot]`), tags the commit `v<version>`, and pushes both together.
+   - It then runs `.github/workflows/release.yml` for that tag. That workflow checks the tag matches `package.json`, builds both files, creates the GitHub Release with generated notes and republishes the VCC listing. It's called directly because a tag pushed with the workflow's own token doesn't start other workflows.
+3. Merges are handled one at a time, in order, so two quick merges get two versions.
+
+`version.yml` runs on `pull_request_target`, which has a token that can push to `main` even for PRs from forks. It never checks out or runs the PR's own code, only `main` after the merge. If `main` gets branch protection that blocks direct pushes, `github-actions[bot]` has to be allowed to push, or the bump fails (the run shows the error).
+
+**By hand:** pushing a `v*` tag still runs `release.yml` on its own (tag a commit whose `package.json` has that version). Use it to redo a release that failed, not for normal releases.
 
 `.github/scripts/build_unitypackage.py` builds the package without Unity. It takes `package.json` and the git-tracked files under `Editor/` (except `Editor/Core/AssemblyInfo.cs`, which only the tests need, and hidden files such as `.gitkeep`) and pairs each file and folder with its committed `.meta`. It writes the `.unitypackage` and the `.zip` (the same files under their own paths, with `package.json` at the root, which is the layout the VCC installs). The same commit always gives byte-identical files. Run it locally with `python3 .github/scripts/build_unitypackage.py`.
 
@@ -128,11 +137,13 @@ Importing a newer `.unitypackage` updates the files in place, but files removed 
 
 ## Versioning
 
-Semantic versioning in `package.json`. The version is bumped only when releasing, never in a tool or feature branch, so parallel branches don't all edit the same line. Pick the bump from everything merged since the last release:
+Semantic versioning in `package.json`, bumped by the merge of each PR (see Releasing), never by hand in a branch, so parallel branches don't all edit the same line. Whoever opens the PR labels it with the size of its change:
 
-- Patch (`0.1.x`): bug fixes.
-- Minor (`0.x.0`): new tools or new features in a tool.
-- Major (`x.0.0`): breaking changes, such as removing a tool or changing the menu root.
+- `patch` (`0.1.x`): bug fixes. Also the default when a PR has none of the three labels.
+- `minor` (`0.x.0`): new tools or new features in a tool.
+- `major` (`x.0.0`): breaking changes, such as removing a tool or changing the menu root.
+
+The three labels have to exist in the repository (**Issues > Labels**). Agents opening a PR add the label and say which one they chose and why.
 
 ## Tools
 
@@ -313,6 +324,7 @@ Template:
 
 Running notes: decisions, ideas and things to remember. Newest first, each dated.
 
+- 2026-10-04: Versioning changed at the owner's request, now that the repository is public and released: every merged PR that changes the package is bumped and released automatically (`version.yml`, `bump_version.py`), with the bump size from a `major` / `minor` / `patch` PR label. Chosen with the owner over bumping inside each PR, which brings back the conflicts on the version line that the 2026-09-28 rule avoided. A PR that changes nothing under `Editor/` or `package.json` isn't released, since its release would hold the same files. Not run on GitHub yet; checked with actionlint and by running the bump script on copies of `package.json`.
 - 2026-10-04: Package Search: looked into the VPM Resolver (`com.vrchat.core.vpm-resolver`) before building Install. VRChat's own download hosts are blocked from the cloud sessions; copies are committed in public VRChat repos (`vrchat-community/examples-image-loading` has 0.1.21 from August 2023, `vpm-package-maker` 0.1.13, `UdonSharp` 0.1.6), read there. The C# in the package is a thin window; the work is in `Editor/Dependencies/vpm-core-lib.dll`, the same library the VCC is built on, licensed under VRChat's Distro licence (free non-commercial redistribution). Public API (namespace `VRC.PackageManagement.Core`), read by reflection and from its IL:
   - `Types.UnityProject(projectDir)`: `AddVPMPackage(IVRCPackage, IEnumerable<IVRCPackageProvider>)` checks compatibility, resolves every dependency (`Repos.GetAllDependencies`), downloads what's missing from the given providers, removes versions it replaces, copies the packages into `Packages/` and writes `vpm-manifest.json` (`dependencies` and `locked`). `GetPackageChanges(package, providers)` returns the changes and conflicts without doing them (a preview for the dependency message). `RemoveVPMPackage(id, force)` refuses to remove a package another one depends on (unless forced) and VRChat's own SDK packages, then deletes the folder and the manifest entries. `VPMProvider` lists what's installed. Downloads are synchronous: the resolver window runs them in `Task.Run`.
   - `Types.Packages.VPMProjectManifest.Load(projectDir)`: `dependencies` and `locked` (id to `version` and `dependencies`), `Save()`, `RemovePackage`. Enough for the Installed tab.
@@ -334,7 +346,7 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - 2026-10-02: Lighting Test Scene revised into a window: avatar field, one button per station, and buttons to create, open, return from and delete the test scene. The avatar is copied into the test scene instead of being dragged in by hand, and the scenes that were open, the camera and the avatar are restored on return. The test scene is kept between sessions so it isn't baked every time. The renderer check was removed (Root Bone and Anchor Fixer covers light anchors). Considered and dropped: building the stage in the user's own scene (a real bake there replaces that scene's lighting data, and faking the probes means overriding the scene's own lights and environment), and a viewport inside the window (Unity can't bake a window's private scene).
 - 2026-10-02: Unity 2022.3.22f1 is installed on the owner's machine (`D:\Unity\Unity Editor\2022.3.22f1`), so local sessions can run the Edit Mode tests without CI: copy `.github/test-project/` to a temporary folder, add `Assets/` and the package under `Packages/com.kndra.hatools/` (as the workflow does), then `Unity.exe -batchmode -projectPath <copy> -runTests -testPlatform EditMode -testResults <file>`.
 - 2026-09-28: Added Root Bone and Anchor Fixer (the "Anchor Override fixer" idea, widened to root bones). Built as its own tool, not a button in Lighting Test Scene's renderer check, since that tool is due for a full revision. The override converts skinned mesh bounds to the new root bone so they don't move.
-- 2026-09-28: Versions are bumped only when releasing, not in each tool branch: every branch bumping `package.json` made parallel branches conflict on the same line.
+- 2026-09-28: Versions are bumped only when releasing, not in each tool branch: every branch bumping `package.json` made parallel branches conflict on the same line. (Replaced 2026-10-04: the merge bumps and releases.)
 - 2026-09-28: Added Shader Fallback Preview: a window that makes a temporary copy of the avatar with VRChat's fallback shaders beside the original and frames it in the Scene view; removing it restores the camera. Fallback rules follow VRChat's docs page (their site is blocked from the cloud sessions, the docs repo `vrchat-community/creator-docs` is not). The copy is placed beside the avatar rather than hiding the original, so the avatar itself is never touched.
 - 2026-09-28: Compile check without Unity (cloud sessions): Unity 2022.3.22f1's compiler, .NET runtime and reference DLLs can be taken from GameCI's `unityci/editor:ubuntu-2022.3.22f1-base-3` image through `mirror.gcr.io` (Unity's own download servers are blocked; Docker Hub rate-limits). Only the needed files are extracted from the 3.7 GB layer (about 180 MB), outside the repo, and never committed (Unity licence). Tests that don't call the engine (pure C# logic) can also run with NUnit's .NET Standard build; the rest need the CI.
 - 2026-09-27: Renamed the project from "Kndra tools" to HaTools (0.3.0): package id `com.kndra.hatools`, namespace `HaTools`, assemblies `HaTools.Editor` / `HaTools.Editor.Tests`, menu `Tools/HaTools/`, shared class `HaToolsMenu`, output folder `Assets/HaTools/`, release file `HaTools-<version>.unitypackage`. A minor bump rather than major because nothing had been released yet. Projects with the old package must delete `Packages/com.kndra.tools` before installing.
