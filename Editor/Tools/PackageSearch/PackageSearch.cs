@@ -1,4 +1,4 @@
-// Package Search: searches GitHub for VRChat packages and installs the ones that publish a VPM listing. Full docs: CLAUDE.md > Tools > Package Search.
+// Package Search: searches GitHub for VRChat packages and installs the VPM ones. Full docs: CLAUDE.md > Tools > Package Search.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +8,7 @@ using UnityEngine.Networking;
 
 namespace HaTools
 {
-    public class PackageSearch : EditorWindow
+    public partial class PackageSearch : EditorWindow
     {
         const string Title = "Package Search";
 
@@ -28,7 +28,17 @@ namespace HaTools
         [NonSerialized] UnityWebRequest request; // the search in progress, if any
         Vector2 scroll;
 
-        void OnDisable() => CancelSearch();
+        void OnEnable()
+        {
+            // Checks don't survive a script reload: start the unfinished ones again
+            if (results.Any(r => r.Vpm == VpmState.Unchecked || r.Vpm == VpmState.Checking)) StartChecks();
+        }
+
+        void OnDisable()
+        {
+            CancelSearch();
+            CancelChecks();
+        }
 
         void OnGUI()
         {
@@ -72,12 +82,40 @@ namespace HaTools
                     GUILayout.Label($"{r.Stars} stars", EditorStyles.miniLabel, GUILayout.ExpandWidth(false));
                 }
                 if (!string.IsNullOrEmpty(r.Description)) EditorGUILayout.LabelField(r.Description, EditorStyles.wordWrappedMiniLabel);
+                DrawVpm(r);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.FlexibleSpace();
-                    // Install / Remove go here once the VPM listing check fills in r.Vpm
+                    if (r.Vpm == VpmState.Found)
+                    {
+                        var back = GUI.backgroundColor;
+                        GUI.backgroundColor = new Color(0.45f, 0.9f, 0.45f);
+                        using (new EditorGUI.DisabledScope(true)) // Install isn't built yet
+                            GUILayout.Button(new GUIContent("Install", "Not built yet"), GUILayout.Width(80));
+                        GUI.backgroundColor = back;
+                    }
                     if (GUILayout.Button("Open in Browser", GUILayout.Width(120))) Application.OpenURL(r.Url);
                 }
+            }
+        }
+
+        static void DrawVpm(Result r)
+        {
+            var p = r.Package;
+            switch (r.Vpm)
+            {
+                case VpmState.Checking:
+                    EditorGUILayout.LabelField("Looking for a VPM package...", EditorStyles.miniLabel);
+                    break;
+                case VpmState.NotFound:
+                    EditorGUILayout.LabelField(string.IsNullOrEmpty(r.VpmNote) ? "No VPM package found." : r.VpmNote, EditorStyles.wordWrappedMiniLabel);
+                    break;
+                case VpmState.Found:
+                    string from = p.Source == VpmSource.Listing ? $"from listing {p.ListingUrl}" : "from the latest release (no listing found)";
+                    EditorGUILayout.LabelField($"VPM: {p.Name} {p.Version}, {from}", EditorStyles.wordWrappedMiniLabel);
+                    if (p.Dependencies.Count > 0)
+                        EditorGUILayout.LabelField("Needs: " + string.Join(", ", p.Dependencies.Select(d => $"{d.Name} {d.Range}")), EditorStyles.wordWrappedMiniLabel);
+                    break;
             }
         }
 
@@ -97,20 +135,9 @@ namespace HaTools
             public int Stars;
             public string Url;           // the repo's GitHub page
             public string DefaultBranch; // where to look for package.json
-            public VpmState Vpm;         // set by the listing check
-            public VpmListing Listing;   // only meaningful when Vpm is Found (Unity never serializes it as null)
-        }
-
-        internal enum VpmState { Unchecked, Checking, Found, NotFound }
-
-        // The package a VPM listing offers for a repo: enough to install it and show what is installed
-        [Serializable]
-        internal class VpmListing
-        {
-            public string Url;         // the listing's index.json
-            public string PackageName; // e.g. com.example.tool
-            public string Version;     // newest version in the listing
-            public string ZipUrl;      // that version's download
+            public VpmState Vpm;         // set by the VPM check (PackageSearch.Vpm.cs)
+            public VpmPackage Package;   // only meaningful when Vpm is Found (Unity never serializes it as null)
+            public string VpmNote;       // why a NotFound repo can't be installed, when there is more to say
         }
 
         // ---------------------------------------------------------------- GitHub search
@@ -119,6 +146,7 @@ namespace HaTools
         // Qualifiers are ANDed, so only one: topic:vrchat topic:vpm would need repos tagged with both
         internal const string Qualifier = "topic:vrchat";
         internal const int MaxResults = 30;
+        const string UserAgent = "HaTools"; // GitHub rejects requests without one
 
         internal static string SearchUrl(string query)
         {
@@ -135,7 +163,7 @@ namespace HaTools
             scroll = Vector2.zero;
             var r = UnityWebRequest.Get(url);
             r.SetRequestHeader("Accept", "application/vnd.github+json");
-            r.SetRequestHeader("User-Agent", "HaTools"); // GitHub rejects requests without one
+            r.SetRequestHeader("User-Agent", UserAgent);
             request = r;
             r.SendWebRequest().completed += _ => SearchDone(r);
         }
@@ -162,6 +190,7 @@ namespace HaTools
                         status = results.Count == 0 ? "Nothing found."
                             : total > results.Count ? $"Showing the first {results.Count} of {total}." : $"Found {results.Count}.";
                         statusIsError = false;
+                        StartChecks();
                     }
                     catch (ArgumentException)
                     {
