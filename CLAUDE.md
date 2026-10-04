@@ -309,3 +309,5 @@ Running notes: decisions, ideas and things to remember. Newest first, each dated
 - 2026-09-27: Purpose clarified: test and optimise avatars without running VRChat, plus general workflow improvements.
 - 2026-09-27: Repository created. Package id `com.kndra.tools`, display name "Kndra tools", menu `Tools/Kndra tools/`. No tools yet.
 - Idea: Material Comparison follow-ups, not done: copy a value (or every difference) from one material to the other; compare override tags; link the rotation of the two preview spheres.
+- Idea: Write Defaults checker. List the animator layers and states that mix Write Defaults on and off, a common cause of toggles that stick in VRChat. Could take a plain AnimatorController, so it wouldn't need the VRChat SDK. Approach to be discussed.
+- Idea: Quest/Android preview. Like Shader Fallback Preview, but swaps the materials for VRChat's mobile shaders (`VRChat/Mobile/...`) to see roughly how the Quest version will look. Approach to be discussed.
