@@ -143,7 +143,7 @@ Semantic versioning in `package.json`, bumped by the merge of each PR (see Relea
 - `minor` (`0.x.0`): new tools or new features in a tool.
 - `major` (`x.0.0`): breaking changes, such as removing a tool or changing the menu root.
 
-The three labels have to exist in the repository (**Issues > Labels**). Agents opening a PR add the label and say which one they chose and why.
+The three labels exist in the repository (created 2026-10-04, **Issues > Labels**); keep their names, since the workflow matches them (any capitalisation). Agents opening a PR add the label and say which one they chose and why.
 
 ## Tools
 
