@@ -230,7 +230,7 @@ Full documentation for each tool. One `###` section per tool, in alphabetical or
 
 ### Package Search
 
-- **Status:** in progress. Done: the window, its two tabs, the GitHub search, the result list with *Open in Browser*, and the VPM check on each result. Not done: Install / Remove (the button is shown but disabled) and the *Installed* tab.
+- **Status:** in progress. Done: the window, its two tabs, the GitHub search, the result list with *Open in Browser*, and the VPM check on each result. Not done: Install / Remove (the button is shown but disabled) and the *Installed* tab. To test on the owner's PC and continue, read `HANDOFF-PackageSearch.md` at the repository root (temporary; delete it before merging).
 - **Files:** `Editor/Tools/PackageSearch/`: `PackageSearch.cs` (window, search), `PackageSearch.Vpm.cs` (VPM check), `PackageSearch.Json.cs` (JSON reader). One `partial` class.
 - **Tests:** `Tests/Editor/PackageSearchTests.cs`: the search address (qualifier and limit added, query escaped, blank query refused), reading GitHub's reply (fields, null description, at most 30 results in GitHub's order, empty replies), the error messages (rate limit with the time to wait, offline, bad query, other codes), the JSON reader (every value type, escapes, invalid text), version order (semver, pre-releases), the release `package.json` (package, dependencies, zip address), listing addresses found in a README (VCC links, badges, `.json` links, what is skipped, the cap), finding the package in a listing (by name, by download address, the repo's own listing, unrelated listings) and reading the VCC's listing cache (from a temporary folder). No network calls.
 - **Menu:** Tools > HaTools > Package Search (opens a window)
