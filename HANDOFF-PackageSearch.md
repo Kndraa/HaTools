@@ -1,6 +1,6 @@
 # Handoff: Package Search, testing on the owner's PC
 
-Temporary file for the agent (or person) picking up **Package Search** on the owner's Windows PC, where Unity and a real VRChat project are available. It was written at the end of the cloud sessions of 2026-10-04, which couldn't run Unity, reach GitHub's search API or reach any VPM listing host. **Delete this file before the branch is merged**; anything worth keeping moves into `CLAUDE.md`.
+Temporary file (with its `.meta`, which CI requires for every file) for the agent (or person) picking up **Package Search** on the owner's Windows PC, where Unity and a real VRChat project are available. It was written at the end of the cloud sessions of 2026-10-04, which couldn't run Unity, reach GitHub's search API or reach any VPM listing host. **Delete this file before the branch is merged**; anything worth keeping moves into `CLAUDE.md`.
 
 Read `CLAUDE.md` first (conventions, *Tools > Package Search*, and the three 2026-10-04 notes). This file only adds what is needed to test and continue.
 
@@ -191,4 +191,4 @@ Plan as discussed, for whoever builds it:
   - [ ] after each install, `vpm-manifest.json` has the package in `dependencies` and `locked`, the package folder is in `Packages/`, the Console is clean, and **the VCC's *Manage Project* page shows the same packages and versions**;
   - [ ] Remove, including refusing to remove a package another depends on;
   - [ ] the Installed tab matches the VCC.
-- **Finally:** the `README.md` line, the full `CLAUDE.md` section (drop "in progress"), and delete this file.
+- **Finally:** the `README.md` line, the full `CLAUDE.md` section (drop "in progress"), and delete this file and its `.meta`.
